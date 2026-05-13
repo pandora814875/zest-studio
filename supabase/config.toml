@@ -1,0 +1,41 @@
+[auth]
+site_url = "https://zest-studio.vercel.app"
+additional_redirect_urls = [
+  "http://127.0.0.1:5173/**",
+  "http://localhost:5173/**",
+  "https://zest-studio.vercel.app/**",
+  "https://*-pandora814875s-projects.vercel.app/**",
+]
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[functions.generate-job]
+verify_jwt = true
+
+[functions.workspace-state]
+verify_jwt = true
+
+[functions.plugin-sync]
+verify_jwt = false
+
+[functions.billing-control]
+verify_jwt = true
+
+[functions.project-hub]
+verify_jwt = true
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.vercel/
+.vite.log
+page-shot.png
+page-shot-2.png
+*.log
+supabase/.temp/
