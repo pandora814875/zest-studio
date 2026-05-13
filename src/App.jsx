@@ -270,6 +270,7 @@ function emptyWorkspaceState() {
     jobs: [],
     billing: null,
     modelCatalog: [],
+    authProviders: null,
   };
 }
 
@@ -559,6 +560,7 @@ function App() {
   const [authMode, setAuthMode] = useState("signin");
   const [authDraft, setAuthDraft] = useState({ email: "", password: "", displayName: "" });
   const [showPasswordAuth, setShowPasswordAuth] = useState(false);
+  const [authProviderState, setAuthProviderState] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authEmailBusy, setAuthEmailBusy] = useState(false);
   const [authProviderBusy, setAuthProviderBusy] = useState(false);
@@ -580,6 +582,10 @@ function App() {
   const currentUser = session?.user || null;
   const userLabel = readUserDisplayName(currentUser) || currentUser?.email || "Signed in";
   const robloxVerified = hasRobloxProvider(currentUser);
+  const robloxProviderStatus =
+    authProviderState?.roblox || workspaceState.authProviders?.roblox || null;
+  const robloxProviderConfigured = Boolean(robloxProviderStatus?.configured);
+  const robloxProviderEnabled = robloxProviderStatus?.enabled !== false;
 
   const activeProject =
     app.projects.find((project) => project.id === app.activeProjectId) || app.projects[0];
@@ -703,6 +709,37 @@ function App() {
       subscription.unsubscribe();
     };
   }, [app.supabaseAnonKey, app.supabaseUrl, supabase]);
+
+  useEffect(() => {
+    if (!app.supabaseUrl.trim() || !app.supabaseAnonKey.trim()) {
+      setAuthProviderState(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    callEdgeFunction(app.supabaseUrl, app.supabaseAnonKey, "provider-status", {})
+      .then((payload) => {
+        if (!cancelled) {
+          setAuthProviderState(payload.authProviders || null);
+        }
+      })
+      .catch((nextError) => {
+        if (!cancelled) {
+          setAuthProviderState({
+            roblox: {
+              configured: false,
+              enabled: false,
+              error: nextError.message,
+            },
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [app.supabaseAnonKey, app.supabaseUrl]);
 
   async function syncProjects(options = {}) {
     const { seedIfEmpty = false } = options;
@@ -1142,6 +1179,22 @@ function App() {
       return;
     }
 
+    if (!robloxProviderConfigured) {
+      setAuthNotice(
+        "Roblox login is not configured in Supabase yet. Create a Roblox OAuth app first, then register it as the custom provider custom:roblox in Supabase Auth.",
+      );
+      setError("");
+      return;
+    }
+
+    if (!robloxProviderEnabled) {
+      setAuthNotice(
+        "The Roblox auth provider exists in Supabase but is disabled. Re-enable custom:roblox in Supabase Auth and try again.",
+      );
+      setError("");
+      return;
+    }
+
     setAuthProviderBusy(true);
     setAuthNotice("");
     setError("");
@@ -1159,9 +1212,11 @@ function App() {
       }
     } catch (nextError) {
       const message =
-        nextError?.message?.includes("provider") ||
-        nextError?.message?.includes("OAuth")
-          ? "Roblox login is not enabled yet. Add a Supabase custom OIDC provider with the identifier custom:roblox first."
+        nextError?.message?.includes("custom provider custom:roblox not found")
+          ? "Supabase does not have the custom:roblox provider yet. Register the Roblox OAuth app in Supabase Auth first."
+          : nextError?.message?.includes("provider") ||
+              nextError?.message?.includes("OAuth")
+            ? "Roblox login is not enabled yet. Add a Supabase custom OIDC provider with the identifier custom:roblox first."
           : nextError.message;
       setError(message);
     } finally {
@@ -2343,20 +2398,45 @@ function App() {
 
             <div className="auth-stack">
               <button
-                className="auth-provider-button"
+                className={`auth-provider-button ${
+                  !robloxProviderConfigured || !robloxProviderEnabled
+                    ? "auth-provider-button-disabled"
+                    : ""
+                }`}
                 type="button"
                 onClick={startRobloxAuth}
                 disabled={authProviderBusy}
               >
-                <span className="auth-provider-badge">Roblox</span>
+                <span className="auth-provider-badge">
+                  {robloxProviderConfigured
+                    ? robloxProviderEnabled
+                      ? "Roblox ready"
+                      : "Roblox disabled"
+                    : "Roblox setup"}
+                </span>
                 <strong>
-                  {authProviderBusy ? "Opening Roblox..." : "Continue with Roblox"}
+                  {authProviderBusy
+                    ? "Opening Roblox..."
+                    : robloxProviderConfigured && robloxProviderEnabled
+                      ? "Continue with Roblox"
+                      : "Finish Roblox setup"}
                 </strong>
                 <span>
-                  Sign in with the same creator account you use in Roblox Studio and keep the
-                  workspace identity verified.
+                  {robloxProviderConfigured && robloxProviderEnabled
+                    ? "Sign in with the same creator account you use in Roblox Studio and keep the workspace identity verified."
+                    : "This project still needs a Roblox OAuth app plus a Supabase custom provider before Roblox verification can work."}
                 </span>
               </button>
+
+              {!robloxProviderConfigured ? (
+                <div className="auth-provider-hint">
+                  <strong>What is missing:</strong>
+                  <span>
+                    No `custom:roblox` provider exists in Supabase yet. After you create a Roblox
+                    OAuth app, wire it to Supabase using the callback URL shown in Supabase Auth.
+                  </span>
+                </div>
+              ) : null}
 
               <div className="auth-divider">
                 <span>or use email without a password</span>

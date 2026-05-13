@@ -50,6 +50,22 @@ To match the easier Lemonade-style login flow, add Roblox as a custom OIDC provi
 
 The frontend already calls `signInWithOAuth({ provider: "custom:roblox" })`, so once those Roblox credentials are in place the button will work without more code changes.
 
+If you see this runtime error:
+
+`Unsupported provider: custom provider custom:roblox not found`
+
+it means the frontend is ready but Supabase does not have the Roblox provider registered yet.
+
+You can set it up with the included helper after creating a Roblox OAuth app:
+
+```bash
+set SUPABASE_URL=https://atycbrnthkgbrsxyabbs.supabase.co
+set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+set ROBLOX_CLIENT_ID=your-roblox-client-id
+set ROBLOX_CLIENT_SECRET=your-roblox-client-secret
+npm run setup:roblox-provider
+```
+
 ### 2. Add the provider and billing secrets
 
 Set these Edge Function secrets in Supabase:
@@ -111,6 +127,7 @@ From this folder:
 npx supabase login
 npx supabase link --project-ref your-project-ref
 npx supabase functions deploy project-hub
+npx supabase functions deploy provider-status --no-verify-jwt
 npx supabase functions deploy workspace-state
 npx supabase functions deploy generate-job
 npx supabase functions deploy billing-control

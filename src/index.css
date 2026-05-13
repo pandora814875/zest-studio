@@ -1362,6 +1362,13 @@ pre {
   cursor: wait;
 }
 
+.auth-provider-button-disabled {
+  border-color: rgba(255, 207, 128, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 207, 128, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.04);
+}
+
 .auth-provider-badge {
   display: inline-flex;
   align-items: center;
@@ -1374,6 +1381,24 @@ pre {
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.auth-provider-hint {
+  display: grid;
+  gap: 0.5rem;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 207, 128, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 207, 128, 0.06);
+}
+
+.auth-provider-hint strong {
+  font-size: 0.9rem;
+}
+
+.auth-provider-hint span {
+  color: var(--muted);
+  line-height: 1.65;
 }
 
 .auth-divider {

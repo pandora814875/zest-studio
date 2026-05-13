@@ -10,12 +10,54 @@ type WorkspaceRow = {
   last_seen_at?: string | null;
 };
 
+async function getAuthProviderState(admin: SupabaseClient) {
+  try {
+    const { data, error } = await admin.auth.admin.customProviders.listProviders({
+      type: "oidc",
+    });
+
+    if (error) {
+      return {
+        roblox: {
+          configured: false,
+          enabled: false,
+          error: error.message,
+        },
+      };
+    }
+
+    const roblox =
+      data.providers.find((provider) => provider.identifier === "custom:roblox") || null;
+
+    return {
+      roblox: {
+        configured: Boolean(roblox),
+        enabled: roblox?.enabled ?? false,
+        emailOptional: roblox?.email_optional ?? false,
+        identifier: roblox?.identifier ?? "custom:roblox",
+      },
+    };
+  } catch (error) {
+    return {
+      roblox: {
+        configured: false,
+        enabled: false,
+        error: error instanceof Error ? error.message : "Unable to inspect auth providers.",
+      },
+    };
+  }
+}
+
 export async function buildWorkspaceState(
   admin: SupabaseClient,
   workspace: WorkspaceRow,
 ) {
-  const [{ data: messages, error: messagesError }, { data: jobs, error: jobsError }, billing] =
-    await Promise.all([
+  const [
+    { data: messages, error: messagesError },
+    { data: jobs, error: jobsError },
+    billing,
+    authProviders,
+  ] = await Promise.all([
       admin
         .from("chat_messages")
         .select("*")
@@ -29,6 +71,7 @@ export async function buildWorkspaceState(
         .order("created_at", { ascending: false })
         .limit(12),
       getWorkspaceBillingState(admin, workspace.id),
+      getAuthProviderState(admin),
     ]);
 
   if (messagesError) {
@@ -47,5 +90,6 @@ export async function buildWorkspaceState(
     jobs,
     billing,
     modelCatalog: getModelCatalog(),
+    authProviders,
   };
 }
