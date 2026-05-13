@@ -31,6 +31,14 @@ type OwnedWorkspaceInput = {
   selectedPacks?: string[];
 };
 
+type GuestWorkspaceInput = {
+  workspaceToken?: string;
+  displayName?: string;
+  description?: string;
+  modelKey?: string;
+  selectedPacks?: string[];
+};
+
 type OwnedWorkspacePatch = {
   displayName?: string;
   description?: string;
@@ -122,6 +130,16 @@ export async function requireUser(request: Request) {
   }
 
   return user;
+}
+
+export async function readOptionalUser(request: Request) {
+  const authHeader = request.headers.get("Authorization");
+
+  if (!authHeader?.trim()) {
+    return null;
+  }
+
+  return requireUser(request);
 }
 
 export async function ensureProfile(
@@ -316,6 +334,69 @@ export async function ensureOwnedWorkspace(
       token_hash: tokenHash,
       token_value: workspaceToken,
       owner_user_id: user.id,
+      display_name: displayName,
+      description,
+      model_key: modelKey,
+      selected_packs: selectedPacks,
+      billing_status: "free",
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  await ensureWorkspaceWallet(admin, data.id);
+  return data as WorkspaceRow;
+}
+
+export async function ensureGuestWorkspace(
+  admin: ReturnType<typeof createAdminClient>,
+  input: GuestWorkspaceInput = {},
+) {
+  const workspaceToken = input.workspaceToken?.trim() || createWorkspaceToken();
+  const existing = await findWorkspaceByToken(admin, workspaceToken);
+  const displayName = input.displayName?.trim() || "Starter Workspace";
+  const description = input.description?.trim() || "";
+  const modelKey = input.modelKey?.trim() || "groq/openai-gpt-oss-20b";
+  const selectedPacks = normalizePackIds(input.selectedPacks);
+
+  if (existing) {
+    if (!existing.owner_user_id) {
+      const { data, error } = await admin
+        .from("workspaces")
+        .update({
+          token_value: workspaceToken,
+          display_name: displayName,
+          description,
+          model_key: modelKey,
+          selected_packs: selectedPacks,
+          is_archived: false,
+        })
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      await ensureWorkspaceWallet(admin, data.id);
+      return data as WorkspaceRow;
+    }
+
+    await ensureWorkspaceWallet(admin, existing.id);
+    return existing;
+  }
+
+  const tokenHash = await sha256Hex(workspaceToken);
+  const { data, error } = await admin
+    .from("workspaces")
+    .insert({
+      token_hash: tokenHash,
+      token_value: workspaceToken,
+      owner_user_id: null,
       display_name: displayName,
       description,
       model_key: modelKey,

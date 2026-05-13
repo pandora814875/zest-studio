@@ -1,4 +1,9 @@
-export type ProviderKind = "openai" | "anthropic" | "gemini" | "openai_compatible";
+export type ProviderKind =
+  | "built_in"
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "openai_compatible";
 
 export type ModelDefinition = {
   key: string;
@@ -10,12 +15,55 @@ export type ModelDefinition = {
   speedScore: number;
   depthScore: number;
   summary: string;
-  secretEnv: string;
+  secretEnv?: string;
   defaultBaseUrl?: string;
   baseUrlEnv?: string;
+  freeStarter?: boolean;
 };
 
 const MODEL_CATALOG: ModelDefinition[] = [
+  {
+    key: "zest/starter-builder",
+    label: "Zest Starter",
+    provider: "built_in",
+    providerLabel: "Built-in",
+    apiModel: "zest-starter-builder",
+    creditCost: 0,
+    speedScore: 4,
+    depthScore: 2,
+    summary: "Zero-key starter planner that scaffolds common Roblox systems so the full site-to-Studio loop works for free.",
+    freeStarter: true,
+  },
+  {
+    key: "groq/openai-gpt-oss-20b",
+    label: "GPT OSS 20B",
+    provider: "openai_compatible",
+    providerLabel: "Groq",
+    apiModel: "openai/gpt-oss-20b",
+    creditCost: 0,
+    speedScore: 5,
+    depthScore: 4,
+    summary: "Free-friendly starter model on Groq with fast coding, planning, and structured JSON output.",
+    secretEnv: "GROQ_API_KEY",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    baseUrlEnv: "GROQ_BASE_URL",
+    freeStarter: true,
+  },
+  {
+    key: "groq/llama-3.3-70b-versatile",
+    label: "Llama 3.3 70B",
+    provider: "openai_compatible",
+    providerLabel: "Groq",
+    apiModel: "llama-3.3-70b-versatile",
+    creditCost: 0,
+    speedScore: 5,
+    depthScore: 3,
+    summary: "Fast general-purpose generation through Groq for free-first Roblox prototyping.",
+    secretEnv: "GROQ_API_KEY",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    baseUrlEnv: "GROQ_BASE_URL",
+    freeStarter: true,
+  },
   {
     key: "openai/gpt-4.1-mini",
     label: "GPT-4.1 Mini",
@@ -87,6 +135,7 @@ const MODEL_CATALOG: ModelDefinition[] = [
     depthScore: 3,
     summary: "Fast and affordable prompting for everyday mechanic generation.",
     secretEnv: "GEMINI_API_KEY",
+    freeStarter: true,
   },
   {
     key: "google/gemini-2.5-pro",
@@ -133,7 +182,7 @@ const MODEL_CATALOG: ModelDefinition[] = [
 export function getModelCatalog() {
   return MODEL_CATALOG.map((model) => ({
     ...model,
-    enabled: Boolean(Deno.env.get(model.secretEnv)),
+    enabled: model.provider === "built_in" || Boolean(model.secretEnv && Deno.env.get(model.secretEnv)),
   }));
 }
 

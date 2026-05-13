@@ -1,4 +1,5 @@
 import { resolveModelChoice } from "./catalog.ts";
+import { buildStarterPlan } from "./starter-planner.ts";
 
 export type PlannerMessage = {
   role: string;
@@ -63,7 +64,12 @@ export async function requestPlanFromProvider(
   const selected = resolveModelChoice(requestedModel);
   let rawText = "";
 
-  if (selected.provider === "openai") {
+  if (selected.provider === "built_in") {
+    return {
+      model: selected,
+      plan: buildStarterPlan(messages),
+    };
+  } else if (selected.provider === "openai") {
     const apiKey = Deno.env.get(selected.secretEnv);
     if (!apiKey) {
       throw new Error(`${selected.secretEnv} is not configured.`);

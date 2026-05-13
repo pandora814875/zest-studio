@@ -3,7 +3,13 @@ import { applyWalletDelta, ensureWorkspaceWallet } from "../_shared/billing.ts";
 import { resolveModelChoice } from "../_shared/catalog.ts";
 import { requestPlanFromProvider } from "../_shared/providers.ts";
 import { buildWorkspaceState } from "../_shared/workspace-state.ts";
-import { createAdminClient, requireOwnedWorkspace, requireString, requireUser } from "../_shared/workspace.ts";
+import {
+  createAdminClient,
+  getWorkspaceByToken,
+  readOptionalUser,
+  requireOwnedWorkspace,
+  requireString,
+} from "../_shared/workspace.ts";
 
 const ROBLOX_PLAN_SCHEMA = {
   name: "roblox_studio_plan",
@@ -124,8 +130,8 @@ Deno.serve(async (request) => {
 
   try {
     const admin = createAdminClient();
-    const user = await requireUser(request);
     const body = await request.json();
+    const user = await readOptionalUser(request);
     const workspaceToken = requireString(body.workspaceToken, "workspaceToken is required.");
     const prompt = requireString(body.prompt, "prompt is required.");
     const requestedModel =
@@ -140,11 +146,14 @@ Deno.serve(async (request) => {
         : "";
     const selectedPacks = sanitizeSelectedPacks(body.selectedPacks);
 
-    const workspace = await requireOwnedWorkspace(admin, user.id, workspaceToken);
+    const workspace = user
+      ? await requireOwnedWorkspace(admin, user.id, workspaceToken)
+      : await getWorkspaceByToken(admin, workspaceToken);
     const wallet = await ensureWorkspaceWallet(admin, workspace.id);
     const selectedModel = resolveModelChoice(requestedModel);
+    const effectiveCreditCost = user ? selectedModel.creditCost : 0;
 
-    if (wallet.credits_balance < selectedModel.creditCost) {
+    if (effectiveCreditCost > 0 && wallet.credits_balance < selectedModel.creditCost) {
       throw new Error(
         `${selectedModel.label} costs ${selectedModel.creditCost} credits, but this workspace only has ${wallet.credits_balance}.`,
       );
@@ -209,7 +218,7 @@ Deno.serve(async (request) => {
     const { model, plan } = await requestPlanFromProvider(requestedModel, plannerInput, ROBLOX_PLAN_SCHEMA);
 
     chargedWorkspaceId = workspace.id;
-    chargedAmount = model.creditCost;
+    chargedAmount = effectiveCreditCost;
     chargedSummary = `${model.label} generation`;
     chargedMetadata = {
       modelKey: model.key,
@@ -218,15 +227,17 @@ Deno.serve(async (request) => {
       prompt,
     };
 
-    await applyWalletDelta(
-      admin,
-      workspace.id,
-      -model.creditCost,
-      "spend",
-      chargedSummary,
-      chargedMetadata,
-    );
-    chargeApplied = true;
+    if (effectiveCreditCost > 0) {
+      await applyWalletDelta(
+        admin,
+        workspace.id,
+        -effectiveCreditCost,
+        "spend",
+        chargedSummary,
+        chargedMetadata,
+      );
+      chargeApplied = true;
+    }
 
     const operations = sanitizeOperations(Array.isArray(plan.operations) ? plan.operations : []);
     const manualSteps = Array.isArray(plan.manual_steps)
@@ -242,7 +253,7 @@ Deno.serve(async (request) => {
         model_key: model.key,
         provider_key: model.provider,
         requested_model: model.apiModel,
-        credit_cost: model.creditCost,
+        credit_cost: effectiveCreditCost,
         summary: String(plan.summary || ""),
         explanation: String(plan.explanation || ""),
         operations,
@@ -260,7 +271,7 @@ Deno.serve(async (request) => {
       `${plan.title || "Plan queued"}`,
       String(plan.summary || ""),
       String(plan.explanation || ""),
-      `Model: ${model.label} (${model.providerLabel}) - ${model.creditCost} credits`,
+      `Model: ${model.label} (${model.providerLabel})${effectiveCreditCost > 0 ? ` - ${effectiveCreditCost} credits` : " - free guest run"}`,
       manualSteps.length ? `Manual steps: ${manualSteps.join(" | ")}` : "",
     ]
       .filter(Boolean)

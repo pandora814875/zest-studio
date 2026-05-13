@@ -17,10 +17,10 @@ max_frequency = "1m0s"
 otp_length = 8
 
 [functions.generate-job]
-verify_jwt = true
+verify_jwt = false
 
 [functions.workspace-state]
-verify_jwt = true
+verify_jwt = false
 
 [functions.auth-status]
 verify_jwt = false
