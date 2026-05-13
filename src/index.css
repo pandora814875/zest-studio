@@ -1419,6 +1419,60 @@ pre {
   background: var(--line);
 }
 
+.pairing-flow {
+  display: grid;
+  gap: 14px;
+}
+
+.pairing-step-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pairing-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(125, 238, 136, 0.14);
+  color: var(--lime);
+  font-weight: 800;
+}
+
+.pairing-step-copy {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.pairing-step-copy p,
+.pairing-status-copy {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.pairing-code-box {
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(120, 210, 255, 0.14);
+  color: var(--text);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.22em;
+}
+
+.pairing-status-row {
+  display: grid;
+  gap: 0.7rem;
+}
+
 .overlay-head {
   align-items: center;
   justify-content: space-between;

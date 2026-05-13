@@ -56,7 +56,7 @@ const ROBLOX_PLAN_SCHEMA = {
 
 function buildSystemPrompt() {
   return [
-    "You are RoboLua Planner, an expert Roblox Studio implementation planner.",
+    "You are the Zest Studio planner, an expert Roblox Studio implementation planner.",
     "You do not return prose outside the requested JSON schema.",
     "Generate operations that a Roblox Studio plugin can safely apply.",
     "Supported operation types:",

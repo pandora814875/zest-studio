@@ -2,6 +2,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { getWorkspaceBillingState } from "../_shared/billing.ts";
 import {
   createAdminClient,
+  getWorkspaceByPairCode,
   getWorkspaceByToken,
   requireString,
   touchWorkspace,
@@ -16,12 +17,34 @@ Deno.serve(async (request) => {
     const admin = createAdminClient();
     const body = await request.json();
     const action = requireString(body.action, "action is required.");
-    const workspaceToken = requireString(body.workspaceToken, "workspaceToken is required.");
     const pluginName =
       typeof body.pluginName === "string" && body.pluginName.trim()
         ? body.pluginName.trim()
-        : "RoboLua Plugin";
+        : "Zest Studio Plugin";
 
+    if (action === "pair") {
+      const pairCode = requireString(body.pairCode, "pairCode is required.");
+      const workspace = await getWorkspaceByPairCode(admin, pairCode);
+      await touchWorkspace(admin, workspace.id, pluginName);
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          workspaceToken: workspace.token_value,
+          workspaceName: workspace.display_name,
+          pluginName,
+          pollSeconds: 4,
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    const workspaceToken = requireString(body.workspaceToken, "workspaceToken is required.");
     const workspace = await getWorkspaceByToken(admin, workspaceToken);
     await touchWorkspace(admin, workspace.id, pluginName);
 

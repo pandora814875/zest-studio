@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import pluginSource from "../plugin/robolua-plugin.lua?raw";
 
 const PRODUCT_NAME = "Zest";
 const PRODUCT_FULL_NAME = "Zest Studio";
 const ROBLOX_PROVIDER = "custom:roblox";
 const SUPABASE_BROWSER_CLIENTS = new Map();
+const ROBLOX_PLUGIN_FOLDER = "C:\\Users\\ayoub\\AppData\\Local\\Roblox\\Plugins";
+const PAIR_CODE_LENGTH = 16;
 
 const STORAGE_KEY = "robolua-studio-config-v3";
 const LEGACY_STORAGE_KEYS = ["robolua-studio-config-v2", "robolua-studio-config-v1"];
@@ -246,6 +249,19 @@ function createWorkspaceToken() {
 
 function createId() {
   return globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizePairCode(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function pairCodeFromWorkspaceToken(workspaceToken) {
+  return normalizePairCode(workspaceToken).slice(0, PAIR_CODE_LENGTH).toUpperCase();
+}
+
+function formatPairCode(code) {
+  const normalized = String(code || "").replace(/[^A-Z0-9]/g, "");
+  return normalized.match(/.{1,4}/g)?.join("-") || "";
 }
 
 function createDefaultProject(overrides = {}) {
@@ -640,6 +656,10 @@ function App() {
         `POLLING: ${Math.max(Number(app.pollingSeconds) || 4, 2)}s`,
       ].join("\n"),
     [activeProject?.workspaceToken, app.pollingSeconds, app.supabaseAnonKey, app.supabaseUrl],
+  );
+  const pluginPairCode = useMemo(
+    () => formatPairCode(pairCodeFromWorkspaceToken(activeProject?.workspaceToken || "")),
+    [activeProject?.workspaceToken],
   );
 
   useEffect(() => {
@@ -1077,6 +1097,22 @@ function App() {
       setCopyFeedback("Copy failed. Try manually.");
       window.setTimeout(() => setCopyFeedback(""), 1800);
     }
+  }
+
+  function downloadPluginFile() {
+    const blob = new Blob([pluginSource], {
+      type: "text/plain;charset=utf-8",
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = "zest-studio-plugin.lua";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    setCopyFeedback("Plugin download started.");
+    window.setTimeout(() => setCopyFeedback(""), 1800);
   }
 
   function togglePack(packId) {
@@ -2010,81 +2046,153 @@ function App() {
                 <div className="dock-head">
                   <div>
                     <p className="eyebrow">Pairing</p>
-                    <h2>Studio connection</h2>
+                    <h2>Install and connect Studio</h2>
                   </div>
                   <div className="dock-action-row">
-                    <button
-                      className="ghost-cta inline-ghost"
-                      type="button"
-                      onClick={() => copyText(pluginSnippet, "Plugin payload")}
-                    >
-                      Copy payload
-                    </button>
                     <button className="ghost-cta inline-ghost" type="button" onClick={saveActiveProject}>
                       {isSavingProject ? "Saving..." : "Save workspace"}
                     </button>
                   </div>
                 </div>
 
-                <label className="field">
-                  <span>Supabase project URL</span>
-                  <input
-                    value={app.supabaseUrl}
-                    onChange={(event) => updateApp("supabaseUrl", event.target.value)}
-                    placeholder="https://your-project.supabase.co"
-                  />
-                </label>
+                <div className="pairing-flow">
+                  <article className="pairing-step-card">
+                    <span className="pairing-step-index">1</span>
+                    <div className="pairing-step-copy">
+                      <strong>Download the plugin</strong>
+                      <p>
+                        Put the plugin into your Roblox Studio plugins folder, then restart
+                        Studio once.
+                      </p>
+                      <div className="dock-action-row">
+                        <button className="primary-cta" type="button" onClick={downloadPluginFile}>
+                          Download plugin
+                        </button>
+                        <button
+                          className="ghost-cta inline-ghost"
+                          type="button"
+                          onClick={() => copyText(ROBLOX_PLUGIN_FOLDER, "Plugins folder path")}
+                        >
+                          Copy plugins folder
+                        </button>
+                      </div>
+                    </div>
+                  </article>
 
-                <label className="field">
-                  <span>Supabase public key</span>
-                  <textarea
-                    value={app.supabaseAnonKey}
-                    onChange={(event) => updateApp("supabaseAnonKey", event.target.value)}
-                    rows={4}
-                    placeholder="Paste your publishable or legacy anon key"
-                  />
-                </label>
+                  <article className="pairing-step-card">
+                    <span className="pairing-step-index">2</span>
+                    <div className="pairing-step-copy">
+                      <strong>Enter this pairing code in Studio</strong>
+                      <p>
+                        Open the Zest plugin in Roblox Studio, paste this short code, then click
+                        `Connect with code`.
+                      </p>
+                      <div className="pairing-code-box">{pluginPairCode || "NO-CODE-YET"}</div>
+                      <div className="dock-action-row">
+                        <button
+                          className="primary-cta"
+                          type="button"
+                          onClick={() => copyText(pluginPairCode, "Pairing code")}
+                        >
+                          Copy pairing code
+                        </button>
+                        <button
+                          className="ghost-cta inline-ghost"
+                          type="button"
+                          onClick={() => copyText(pluginSnippet, "Legacy plugin payload")}
+                        >
+                          Copy legacy payload
+                        </button>
+                      </div>
+                    </div>
+                  </article>
 
-                <label className="field">
-                  <span>Project name</span>
-                  <input
-                    value={activeProject?.name || ""}
-                    onChange={(event) => updateActiveProject({ name: event.target.value })}
-                  />
-                </label>
+                  <article className="pairing-step-card">
+                    <span className="pairing-step-index">3</span>
+                    <div className="pairing-step-copy">
+                      <strong>Start sync in Studio</strong>
+                      <p>
+                        After the plugin pairs, click `Start sync`. Zest will begin claiming queued
+                        jobs and reporting results back here.
+                      </p>
+                      <div className="pairing-status-row">
+                        <span
+                          className={`top-status ${
+                            workspaceState.pluginOnline ? "top-status-live" : ""
+                          }`}
+                        >
+                          {workspaceState.pluginOnline ? "Plugin connected" : "Plugin waiting"}
+                        </span>
+                        <span className="pairing-status-copy">
+                          {workspaceState.pluginOnline
+                            ? "Studio is actively checking for jobs."
+                            : "The web app will flip live as soon as Studio pairs and starts syncing."}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
 
-                <label className="field">
-                  <span>Project brief</span>
-                  <textarea
-                    value={activeProject?.description || ""}
-                    onChange={(event) => updateActiveProject({ description: event.target.value })}
-                    rows={4}
-                    placeholder="Direction, references, and what this workspace is trying to ship."
-                  />
-                </label>
+                <details className="details-block">
+                  <summary>Advanced manual setup</summary>
 
-                <label className="field">
-                  <span>Workspace token</span>
-                  <div className="inline-field">
+                  <label className="field">
+                    <span>Supabase project URL</span>
                     <input
-                      value={activeProject?.workspaceToken || ""}
-                      readOnly
+                      value={app.supabaseUrl}
+                      onChange={(event) => updateApp("supabaseUrl", event.target.value)}
+                      placeholder="https://your-project.supabase.co"
                     />
-                  </div>
-                </label>
+                  </label>
 
-                <label className="field">
-                  <span>Polling seconds</span>
-                  <input
-                    type="number"
-                    min="2"
-                    max="30"
-                    value={app.pollingSeconds}
-                    onChange={(event) => updateApp("pollingSeconds", event.target.value)}
-                  />
-                </label>
+                  <label className="field">
+                    <span>Supabase public key</span>
+                    <textarea
+                      value={app.supabaseAnonKey}
+                      onChange={(event) => updateApp("supabaseAnonKey", event.target.value)}
+                      rows={4}
+                      placeholder="Paste your publishable or legacy anon key"
+                    />
+                  </label>
 
-                <pre className="snippet-block">{pluginSnippet}</pre>
+                  <label className="field">
+                    <span>Project name</span>
+                    <input
+                      value={activeProject?.name || ""}
+                      onChange={(event) => updateActiveProject({ name: event.target.value })}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Project brief</span>
+                    <textarea
+                      value={activeProject?.description || ""}
+                      onChange={(event) => updateActiveProject({ description: event.target.value })}
+                      rows={4}
+                      placeholder="Direction, references, and what this workspace is trying to ship."
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Workspace token</span>
+                    <div className="inline-field">
+                      <input value={activeProject?.workspaceToken || ""} readOnly />
+                    </div>
+                  </label>
+
+                  <label className="field">
+                    <span>Polling seconds</span>
+                    <input
+                      type="number"
+                      min="2"
+                      max="30"
+                      value={app.pollingSeconds}
+                      onChange={(event) => updateApp("pollingSeconds", event.target.value)}
+                    />
+                  </label>
+
+                  <pre className="snippet-block">{pluginSnippet}</pre>
+                </details>
               </section>
 
               <section className="dock-card" id="setup-runbook">
@@ -2106,7 +2214,7 @@ function App() {
                   </div>
                   <div className="setup-step">
                     <strong>3. Deploy functions</strong>
-                    <pre>{`npx supabase functions deploy project-hub\nnpx supabase functions deploy workspace-state\nnpx supabase functions deploy generate-job\nnpx supabase functions deploy billing-control\nnpx supabase functions deploy create-checkout\nnpx supabase functions deploy customer-portal\nnpx supabase functions deploy plugin-sync --no-verify-jwt\nnpx supabase functions deploy stripe-webhook --no-verify-jwt`}</pre>
+                    <pre>{`npx supabase functions deploy project-hub\nnpx supabase functions deploy workspace-state\nnpx supabase functions deploy generate-job\nnpx supabase functions deploy billing-control\nnpx supabase functions deploy create-checkout\nnpx supabase functions deploy customer-portal\nnpx supabase functions deploy plugin-sync --no-verify-jwt\nnpx supabase functions deploy auth-status --no-verify-jwt\nnpx supabase functions deploy provider-status --no-verify-jwt\nnpx supabase functions deploy stripe-webhook --no-verify-jwt`}</pre>
                   </div>
                 </div>
               </section>

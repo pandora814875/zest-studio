@@ -2,7 +2,19 @@ local HttpService = game:GetService("HttpService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
 
+local DEFAULT_SUPABASE_URL = "https://atycbrnthkgbrsxyabbs.supabase.co"
+local DEFAULT_SUPABASE_API_KEY = "sb_publishable_7pxGbv-NvSefp8w9RpZ8_g_vkQNkSOJ"
+local DEFAULT_POLL_SECONDS = 4
+local PLUGIN_NAME = "Zest Plugin"
+
 local SETTINGS_KEYS = {
+	url = "zest_url",
+	apiKey = "zest_api_key",
+	workspaceToken = "zest_workspace_token",
+	pollSeconds = "zest_poll_seconds",
+}
+
+local LEGACY_SETTINGS_KEYS = {
 	url = "robolua_url",
 	apiKey = "robolua_api_key",
 	workspaceToken = "robolua_workspace_token",
@@ -21,9 +33,9 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	true,
 	false,
 	360,
-	510,
+	620,
 	320,
-	420
+	520
 )
 
 local widget = plugin:CreateDockWidgetPluginGui("ZestStudioWidget", widgetInfo)
@@ -33,11 +45,25 @@ local state = {
 	isRunning = false,
 }
 
+local function getSettingWithFallback(primaryKey, legacyKey, fallbackValue)
+	local primaryValue = plugin:GetSetting(primaryKey)
+	if primaryValue ~= nil and primaryValue ~= "" then
+		return primaryValue
+	end
+
+	local legacyValue = plugin:GetSetting(legacyKey)
+	if legacyValue ~= nil and legacyValue ~= "" then
+		return legacyValue
+	end
+
+	return fallbackValue
+end
+
 local config = {
-	url = plugin:GetSetting(SETTINGS_KEYS.url) or "",
-	apiKey = plugin:GetSetting(SETTINGS_KEYS.apiKey) or "",
-	workspaceToken = plugin:GetSetting(SETTINGS_KEYS.workspaceToken) or "",
-	pollSeconds = tonumber(plugin:GetSetting(SETTINGS_KEYS.pollSeconds)) or 5,
+	url = getSettingWithFallback(SETTINGS_KEYS.url, LEGACY_SETTINGS_KEYS.url, DEFAULT_SUPABASE_URL),
+	apiKey = getSettingWithFallback(SETTINGS_KEYS.apiKey, LEGACY_SETTINGS_KEYS.apiKey, DEFAULT_SUPABASE_API_KEY),
+	workspaceToken = getSettingWithFallback(SETTINGS_KEYS.workspaceToken, LEGACY_SETTINGS_KEYS.workspaceToken, ""),
+	pollSeconds = tonumber(getSettingWithFallback(SETTINGS_KEYS.pollSeconds, LEGACY_SETTINGS_KEYS.pollSeconds, DEFAULT_POLL_SECONDS)) or DEFAULT_POLL_SECONDS,
 }
 
 local function trim(value)
@@ -111,38 +137,46 @@ title.Font = Enum.Font.GothamBlack
 title.Parent = root
 
 local subtitle = makeLabel(
-	"Pair this plugin with the browser app, then Zest will claim queued jobs and apply scripts or folders directly in Studio.",
+	"Install the plugin once, enter the short pairing code from the Zest dashboard, then let Studio claim jobs and apply scripts automatically.",
 	13,
 	Color3.fromRGB(184, 191, 179)
 )
 subtitle.Parent = root
 
-local urlLabel = makeLabel("Supabase URL", 12, Color3.fromRGB(184, 191, 179))
+local pairLabel = makeLabel("1. Pair with dashboard code", 12, Color3.fromRGB(184, 191, 179))
+pairLabel.Parent = root
+local pairCodeBox = makeBox("Example: 1A2B-3C4D-5E6F-7A8B", "", 38)
+pairCodeBox.Parent = root
+
+local pairButton = makeButton("Connect with code", Color3.fromRGB(120, 210, 255))
+pairButton.Parent = root
+
+local urlLabel = makeLabel("Advanced: Supabase URL", 12, Color3.fromRGB(184, 191, 179))
 urlLabel.Parent = root
 local urlBox = makeBox("https://your-project.supabase.co", config.url)
 urlBox.Parent = root
 
-local keyLabel = makeLabel("Supabase anon / publishable key", 12, Color3.fromRGB(184, 191, 179))
+local keyLabel = makeLabel("Advanced: Supabase anon / publishable key", 12, Color3.fromRGB(184, 191, 179))
 keyLabel.Parent = root
 local keyBox = makeBox("Paste the public key used by the app", config.apiKey, 88)
 keyBox.TextWrapped = true
 keyBox.TextYAlignment = Enum.TextYAlignment.Top
 keyBox.Parent = root
 
-local tokenLabel = makeLabel("Workspace token", 12, Color3.fromRGB(184, 191, 179))
+local tokenLabel = makeLabel("Resolved workspace token", 12, Color3.fromRGB(184, 191, 179))
 tokenLabel.Parent = root
 local tokenBox = makeBox("Shared token from the app", config.workspaceToken)
 tokenBox.Parent = root
 
-local pollLabel = makeLabel("Polling interval in seconds", 12, Color3.fromRGB(184, 191, 179))
+local pollLabel = makeLabel("2. Polling interval in seconds", 12, Color3.fromRGB(184, 191, 179))
 pollLabel.Parent = root
 local pollBox = makeBox("5", tostring(config.pollSeconds))
 pollBox.Parent = root
 
-local saveButton = makeButton("Save settings", Color3.fromRGB(207, 244, 100))
+local saveButton = makeButton("Save advanced settings", Color3.fromRGB(207, 244, 100))
 saveButton.Parent = root
 
-local syncButton = makeButton("Start sync", Color3.fromRGB(132, 240, 197))
+local syncButton = makeButton("3. Start sync", Color3.fromRGB(132, 240, 197))
 syncButton.Parent = root
 
 local runOnceButton = makeButton("Check once now", Color3.fromRGB(255, 207, 117))
@@ -152,7 +186,7 @@ local statusLabel = makeLabel("Status: idle", 13, Color3.fromRGB(239, 241, 236))
 statusLabel.Parent = root
 
 local logLabel = makeLabel(
-	"Tip: keep Allow HTTP Requests enabled in Game Settings > Security.",
+	"Tip: keep Allow HTTP Requests enabled in Game Settings > Security. Download the plugin from the Zest site, move it into the Roblox Plugins folder, then restart Studio.",
 	12,
 	Color3.fromRGB(184, 191, 179)
 )
@@ -170,20 +204,35 @@ local function saveConfig()
 	config.url = trim(urlBox.Text)
 	config.apiKey = trim(keyBox.Text)
 	config.workspaceToken = trim(tokenBox.Text)
-	config.pollSeconds = math.max(tonumber(trim(pollBox.Text)) or 5, 2)
+	config.pollSeconds = math.max(tonumber(trim(pollBox.Text)) or DEFAULT_POLL_SECONDS, 2)
 
 	plugin:SetSetting(SETTINGS_KEYS.url, config.url)
 	plugin:SetSetting(SETTINGS_KEYS.apiKey, config.apiKey)
 	plugin:SetSetting(SETTINGS_KEYS.workspaceToken, config.workspaceToken)
 	plugin:SetSetting(SETTINGS_KEYS.pollSeconds, config.pollSeconds)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.url, config.url)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.apiKey, config.apiKey)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.workspaceToken, config.workspaceToken)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.pollSeconds, config.pollSeconds)
 
 	setStatus("settings saved")
-	setLog("The plugin is ready to talk to your Supabase functions.")
+	setLog("Advanced plugin settings were saved.")
+end
+
+local function sanitizePairCode(value)
+	return string.upper((value or ""):gsub("[^%w]", ""))
+end
+
+local function ensureHttpConfigured()
+	if config.url == "" or config.apiKey == "" then
+		error("Supabase URL and public key are required.")
+	end
 end
 
 local function ensureConfigured()
-	if config.url == "" or config.apiKey == "" or config.workspaceToken == "" then
-		error("Supabase URL, anon key, and workspace token are all required.")
+	ensureHttpConfigured()
+	if config.workspaceToken == "" then
+		error("Pair the plugin first or paste a workspace token manually.")
 	end
 end
 
@@ -191,8 +240,12 @@ local function functionUrl(name)
 	return string.gsub(config.url, "/+$", "") .. "/functions/v1/" .. name
 end
 
-local function requestJson(functionName, payload)
-	ensureConfigured()
+local function requestJson(functionName, payload, requireWorkspaceToken)
+	if requireWorkspaceToken == false then
+		ensureHttpConfigured()
+	else
+		ensureConfigured()
+	end
 
 	local response = HttpService:RequestAsync({
 		Url = functionUrl(functionName),
@@ -214,6 +267,41 @@ local function requestJson(functionName, payload)
 	end
 
 	return decoded
+end
+
+local function pairWithDashboardCode()
+	saveConfig()
+
+	local pairCode = sanitizePairCode(pairCodeBox.Text)
+	if pairCode == "" then
+		error("Enter the pairing code shown in the Zest dashboard first.")
+	end
+
+	setStatus("pairing plugin")
+	setLog("Connecting this Studio plugin to your Zest workspace...")
+
+	local response = requestJson("plugin-sync", {
+		action = "pair",
+		pairCode = pairCode,
+		pluginName = PLUGIN_NAME,
+	}, false)
+
+	config.workspaceToken = trim(response.workspaceToken or "")
+	config.pollSeconds = math.max(tonumber(response.pollSeconds) or config.pollSeconds, 2)
+	tokenBox.Text = config.workspaceToken
+	pollBox.Text = tostring(config.pollSeconds)
+
+	plugin:SetSetting(SETTINGS_KEYS.url, config.url)
+	plugin:SetSetting(SETTINGS_KEYS.apiKey, config.apiKey)
+	plugin:SetSetting(SETTINGS_KEYS.workspaceToken, config.workspaceToken)
+	plugin:SetSetting(SETTINGS_KEYS.pollSeconds, config.pollSeconds)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.url, config.url)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.apiKey, config.apiKey)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.workspaceToken, config.workspaceToken)
+	plugin:SetSetting(LEGACY_SETTINGS_KEYS.pollSeconds, config.pollSeconds)
+
+	setStatus("paired")
+	setLog(("Connected to %s. You can start sync now."):format(response.workspaceName or "your workspace"))
 end
 
 local function splitPath(path)
@@ -424,20 +512,20 @@ local function completeJob(jobId, status, resultLog, lastError)
 	return requestJson("plugin-sync", {
 		action = "complete",
 		workspaceToken = config.workspaceToken,
-		pluginName = "Zest Plugin",
+		pluginName = PLUGIN_NAME,
 		jobId = jobId,
 		status = status,
 		resultLog = resultLog or {},
 		lastError = lastError or "",
-	})
+	}, true)
 end
 
 local function claimNextJob()
 	return requestJson("plugin-sync", {
 		action = "claim",
 		workspaceToken = config.workspaceToken,
-		pluginName = "Zest Plugin",
-	})
+		pluginName = PLUGIN_NAME,
+	}, true)
 end
 
 local function runSinglePass()
@@ -513,6 +601,14 @@ saveButton.MouseButton1Click:Connect(function()
 	local ok, err = pcall(saveConfig)
 	if not ok then
 		setStatus("save failed")
+		setLog(tostring(err))
+	end
+end)
+
+pairButton.MouseButton1Click:Connect(function()
+	local ok, err = pcall(pairWithDashboardCode)
+	if not ok then
+		setStatus("pairing failed")
 		setLog(tostring(err))
 	end
 end)

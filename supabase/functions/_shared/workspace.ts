@@ -64,6 +64,14 @@ export function createWorkspaceToken() {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
+export function normalizePairCode(value: string) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function pairCodeFromWorkspaceToken(workspaceToken: string) {
+  return normalizePairCode(workspaceToken).slice(0, 16);
+}
+
 export function createAdminClient() {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -189,6 +197,40 @@ export async function getWorkspaceByToken(
     throw new Error("Workspace token not found. Create the project in the dashboard first.");
   }
 
+  await ensureWorkspaceWallet(admin, workspace.id);
+  return workspace;
+}
+
+export async function getWorkspaceByPairCode(
+  admin: ReturnType<typeof createAdminClient>,
+  pairCode: string,
+) {
+  const normalizedCode = normalizePairCode(pairCode);
+
+  if (normalizedCode.length < 8) {
+    throw new Error("Pair code is too short. Use the code shown in the Zest dashboard.");
+  }
+
+  const { data, error } = await admin
+    .from("workspaces")
+    .select("*")
+    .eq("is_archived", false)
+    .ilike("token_value", `${normalizedCode}%`)
+    .limit(2);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.length) {
+    throw new Error("Pair code not found. Generate a new code from the Zest dashboard.");
+  }
+
+  if (data.length > 1) {
+    throw new Error("This pair code matched more than one workspace. Refresh the dashboard and use a newer code.");
+  }
+
+  const workspace = data[0] as WorkspaceRow;
   await ensureWorkspaceWallet(admin, workspace.id);
   return workspace;
 }

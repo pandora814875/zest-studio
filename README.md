@@ -175,11 +175,12 @@ Subscribe it to at least:
 1. Open Roblox Studio.
 2. Enable **Game Settings > Security > Allow HTTP Requests**.
 3. Open the local Plugins folder from Studio.
-4. Place [plugin/robolua-plugin.lua](./plugin/robolua-plugin.lua) into that folder.
+4. Download the plugin from the Zest dashboard or copy [plugin/robolua-plugin.lua](./plugin/robolua-plugin.lua) into that folder.
 5. Restart Studio.
 6. Open the **Zest Studio** toolbar button.
-7. Copy the payload block from the web dashboard and paste it into the plugin.
-8. Click **Start sync**.
+7. In the dashboard, copy the short pairing code.
+8. In Studio, paste that code into the plugin and click **Connect with code**.
+9. Click **Start sync**.
 
 ## How to use the new dashboard
 
