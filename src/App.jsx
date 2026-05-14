@@ -1,33 +1,136 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import pluginSource from "../plugin/robolua-plugin.lua?raw";
 
 const PRODUCT_NAME = "Zest";
 const PRODUCT_FULL_NAME = "Zest Studio";
 const STORAGE_KEY = "zest-studio-local-v2";
-const LEGACY_STORAGE_KEYS = ["zest-studio-local-v1", "robolua-studio-config-v3", "robolua-studio-config-v2", "robolua-studio-config-v1"];
+const SUPABASE_CLIENT_CACHE = new Map();
+const LEGACY_STORAGE_KEYS = [
+  "zest-studio-local-v1",
+  "robolua-studio-config-v3",
+  "robolua-studio-config-v2",
+  "robolua-studio-config-v1",
+];
 const PAIR_CODE_LENGTH = 16;
 const PLUGIN_FOLDER_HINT = "Windows: %LocalAppData%\\Roblox\\Plugins";
 
 const LOCAL_MODEL_CATALOG = [
-  { key: "zest/starter-builder", label: "Zest Starter", providerLabel: "Built-in", creditCost: 0, enabled: true, freeStarter: true, summary: "No key needed. Good for proving the whole site-to-Studio loop first." },
-  { key: "groq/openai-gpt-oss-20b", label: "GPT OSS 20B", providerLabel: "Groq", creditCost: 0, enabled: true, freeStarter: true, summary: "Free-friendly Groq starter for better planning once you add a key." },
-  { key: "groq/llama-3.3-70b-versatile", label: "Llama 3.3 70B", providerLabel: "Groq", creditCost: 0, enabled: true, freeStarter: true, summary: "Fast general-purpose generation for common mechanics and UI." },
-  { key: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", providerLabel: "Google", creditCost: 1, enabled: true, freeStarter: true, summary: "Good fast fallback when Gemini is configured." },
-  { key: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", providerLabel: "Anthropic", creditCost: 3, enabled: true, freeStarter: false, summary: "Better for larger and more exact system generation." },
-  { key: "anthropic/claude-opus-4-1", label: "Claude Opus 4.1", providerLabel: "Anthropic", creditCost: 6, enabled: true, freeStarter: false, summary: "Heavy reasoning for bigger project architecture." },
-  { key: "openai/gpt-4.1-mini", label: "GPT-4.1 Mini", providerLabel: "OpenAI", creditCost: 1, enabled: true, freeStarter: false, summary: "Quick scaffolding and quick follow-up iterations." },
-  { key: "moonshot/kimi-k2.5", label: "Kimi K2.5", providerLabel: "Moonshot", creditCost: 2, enabled: true, freeStarter: false, summary: "Strong OpenAI-compatible coding model when configured." },
+  {
+    key: "zest/starter-builder",
+    label: "Zest Starter",
+    providerLabel: "Built-in",
+    creditCost: 0,
+    enabled: true,
+    freeStarter: true,
+    summary: "No key needed. Good for proving the whole site-to-Studio loop first.",
+  },
+  {
+    key: "groq/openai-gpt-oss-20b",
+    label: "GPT OSS 20B",
+    providerLabel: "Groq",
+    creditCost: 0,
+    enabled: true,
+    freeStarter: true,
+    summary: "Free-friendly Groq starter for better planning once you add a key.",
+  },
+  {
+    key: "groq/llama-3.3-70b-versatile",
+    label: "Llama 3.3 70B",
+    providerLabel: "Groq",
+    creditCost: 0,
+    enabled: true,
+    freeStarter: true,
+    summary: "Fast general-purpose generation for common mechanics and UI.",
+  },
+  {
+    key: "google/gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    providerLabel: "Google",
+    creditCost: 1,
+    enabled: true,
+    freeStarter: true,
+    summary: "Good fast fallback when Gemini is configured.",
+  },
+  {
+    key: "anthropic/claude-sonnet-4",
+    label: "Claude Sonnet 4",
+    providerLabel: "Anthropic",
+    creditCost: 3,
+    enabled: true,
+    freeStarter: false,
+    summary: "Better for larger and more exact system generation.",
+  },
+  {
+    key: "anthropic/claude-opus-4-1",
+    label: "Claude Opus 4.1",
+    providerLabel: "Anthropic",
+    creditCost: 6,
+    enabled: true,
+    freeStarter: false,
+    summary: "Heavy reasoning for bigger project architecture.",
+  },
+  {
+    key: "openai/gpt-4.1-mini",
+    label: "GPT-4.1 Mini",
+    providerLabel: "OpenAI",
+    creditCost: 1,
+    enabled: true,
+    freeStarter: false,
+    summary: "Quick scaffolding and quick follow-up iterations.",
+  },
+  {
+    key: "moonshot/kimi-k2.5",
+    label: "Kimi K2.5",
+    providerLabel: "Moonshot",
+    creditCost: 2,
+    enabled: true,
+    freeStarter: false,
+    summary: "Strong OpenAI-compatible coding model when configured.",
+  },
 ];
 
 const PACK_LIBRARY = [
-  { id: "inventory-ui", name: "Inventory UI", description: "Slots, inspect cards, rarity borders, equip states, and hotbar structure." },
-  { id: "economy-core", name: "Economy Core", description: "Coins, shop rows, bundles, purchase states, and reward pacing." },
-  { id: "round-director", name: "Round Director", description: "Lobby timers, intermission loops, teleports, and round flow." },
-  { id: "combat-kit", name: "Combat Kit", description: "Hitboxes, cooldowns, remotes, combo flow, and impact feedback." },
-  { id: "rng-cards", name: "RNG Cards", description: "Weighted rarity rolls, pity logic, reveal cards, and collection loops." },
-  { id: "datastore-safe", name: "Save Layer", description: "Profile schemas, retry-safe saves, rollback-friendly structure, and sessions." },
-  { id: "monster-ai", name: "Monster AI", description: "Simple pursuit, attack loops, aggro checks, and enemy logic." },
-  { id: "housing-plots", name: "Plot Builder", description: "Claimable plots, placement validation, permissions, and ownership loops." },
+  {
+    id: "inventory-ui",
+    name: "Inventory UI",
+    description: "Slots, inspect cards, rarity borders, equip states, and hotbar structure.",
+  },
+  {
+    id: "economy-core",
+    name: "Economy Core",
+    description: "Coins, shop rows, bundles, purchase states, and reward pacing.",
+  },
+  {
+    id: "round-director",
+    name: "Round Director",
+    description: "Lobby timers, intermission loops, teleports, and round flow.",
+  },
+  {
+    id: "combat-kit",
+    name: "Combat Kit",
+    description: "Hitboxes, cooldowns, remotes, combo flow, and impact feedback.",
+  },
+  {
+    id: "rng-cards",
+    name: "RNG Cards",
+    description: "Weighted rarity rolls, pity logic, reveal cards, and collection loops.",
+  },
+  {
+    id: "datastore-safe",
+    name: "Save Layer",
+    description: "Profile schemas, retry-safe saves, rollback-friendly structure, and sessions.",
+  },
+  {
+    id: "monster-ai",
+    name: "Monster AI",
+    description: "Simple pursuit, attack loops, aggro checks, and enemy logic.",
+  },
+  {
+    id: "housing-plots",
+    name: "Plot Builder",
+    description: "Claimable plots, placement validation, permissions, and ownership loops.",
+  },
 ];
 
 const PROMPT_SUGGESTIONS = [
@@ -39,37 +142,72 @@ const PROMPT_SUGGESTIONS = [
 
 const HOME_FEATURES = [
   {
-    icon: "✦",
-    title: "Prompt → Roblox Script",
+    icon: "AI",
+    title: "Prompt to Roblox Script",
     body: "Describe a mechanic, UI, or system in plain English. Zest generates structured Lua that your Studio plugin applies automatically.",
   },
   {
-    icon: "⟳",
+    icon: "WS",
+    title: "Web-first Sign In",
+    body: "Sign in with Roblox on the website first, keep your builder unlocked, then connect Studio only when you are ready.",
+  },
+  {
+    icon: "PL",
     title: "Live Studio Sync",
-    body: "The plugin polls for jobs every few seconds. Accept changes with one click or let it auto-apply — no copy-paste, no export.",
+    body: "The plugin checks for jobs every few seconds. Accept changes with one click or let it auto-apply.",
   },
   {
-    icon: "▤",
+    icon: "PK",
     title: "Pack Library",
-    body: "Seed the AI with context packs — Inventory UI, Combat Kit, Save Layer, and more — so generated code fits your game's patterns.",
-  },
-  {
-    icon: "◈",
-    title: "Any AI Model",
-    body: "Switch between Llama, Gemini, Claude, and GPT from the model selector. Free starter models need no API key to try.",
+    body: "Seed the AI with context packs like Inventory UI, Combat Kit, and Save Layer so generated code fits your game.",
   },
 ];
 
 const HOME_STEPS = [
-  { num: "01", label: "Describe your feature", body: 'Type a prompt like "create a shop with currency display" into the composer.' },
-  { num: "02", label: "Zest queues a job", body: "The server plans, writes, and structures the Lua operations." },
-  { num: "03", label: "Studio applies it", body: "The Roblox plugin picks up the job and inserts scripts into your game tree." },
+  {
+    num: "01",
+    label: "Sign in with Roblox",
+    body: "Start on the homepage and complete the official Roblox account consent flow.",
+  },
+  {
+    num: "02",
+    label: "Describe your feature",
+    body: "Use the workspace composer to queue a plan for your mechanic, UI, or system.",
+  },
+  {
+    num: "03",
+    label: "Pair Studio and apply",
+    body: "Install the plugin, paste your pair code, and let Studio pull the job into your game tree.",
+  },
+];
+
+const ONBOARDING_OPTIONS = [
+  {
+    id: "builder",
+    title: "I know what I'm building",
+    body: "I already have a feature or idea and want to start prototyping right away.",
+    badge: "Stay focused",
+  },
+  {
+    id: "exploring",
+    title: "Still figuring it out",
+    body: "I want starter ideas and room to explore before locking a direction.",
+    badge: "Exploring",
+  },
 ];
 
 class WorkspaceErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
   componentDidCatch() {}
+
   render() {
     if (this.state.hasError) {
       return (
@@ -78,17 +216,27 @@ class WorkspaceErrorBoundary extends React.Component {
             <div className="fatal-logo">{PRODUCT_NAME}</div>
             <h1>Something broke in the workspace.</h1>
             <p>Reload the page and try again.</p>
-            <button className="primary-button" type="button" onClick={() => window.location.reload()}>Reload</button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => window.location.reload()}
+            >
+              Reload
+            </button>
           </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }
 
 function createWorkspaceToken() {
-  return globalThis.crypto?.randomUUID?.().replaceAll("-", "") || Math.random().toString(36).slice(2, 22);
+  return (
+    globalThis.crypto?.randomUUID?.().replaceAll("-", "") ||
+    Math.random().toString(36).slice(2, 22)
+  );
 }
 
 function createId() {
@@ -130,6 +278,7 @@ function defaultAppState() {
     projects: [project],
     activeProjectId: project.id,
     studioAuth: null,
+    onboardingByUser: {},
   };
 }
 
@@ -145,8 +294,13 @@ function loadAppState() {
           supabaseAnonKey: saved.supabaseAnonKey || fallback.supabaseAnonKey,
           pollingSeconds: Number(saved.pollingSeconds) || fallback.pollingSeconds,
           projects: saved.projects,
-          activeProjectId: saved.activeProjectId || saved.projects[0]?.id || fallback.activeProjectId,
+          activeProjectId:
+            saved.activeProjectId || saved.projects[0]?.id || fallback.activeProjectId,
           studioAuth: saved.studioAuth || fallback.studioAuth,
+          onboardingByUser:
+            saved.onboardingByUser && typeof saved.onboardingByUser === "object"
+              ? saved.onboardingByUser
+              : fallback.onboardingByUser,
         };
       }
     } catch {}
@@ -155,11 +309,38 @@ function loadAppState() {
 }
 
 function emptyWorkspaceState() {
-  return { accessMode: "guest", project: null, workspace: null, pluginOnline: false, messages: [], jobs: [], modelCatalog: [], authProviders: {} };
+  return {
+    accessMode: "guest",
+    project: null,
+    workspace: null,
+    pluginOnline: false,
+    messages: [],
+    jobs: [],
+    modelCatalog: [],
+    authProviders: {},
+  };
 }
 
 function functionUrl(baseUrl, functionName) {
   return `${baseUrl.replace(/\/+$/, "")}/functions/v1/${functionName}`;
+}
+
+function getBrowserSupabaseClient(url, anonKey) {
+  const cacheKey = `${url}::${anonKey}`;
+  if (!SUPABASE_CLIENT_CACHE.has(cacheKey)) {
+    SUPABASE_CLIENT_CACHE.set(
+      cacheKey,
+      createClient(url, anonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          flowType: "pkce",
+        },
+      }),
+    );
+  }
+
+  return SUPABASE_CLIENT_CACHE.get(cacheKey);
 }
 
 async function callEdgeFunction(baseUrl, anonKey, functionName, body) {
@@ -169,44 +350,121 @@ async function callEdgeFunction(baseUrl, anonKey, functionName, body) {
     body: JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Request failed with ${response.status}`);
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed with ${response.status}`);
+  }
   return payload;
 }
 
 function formatDateTime(value) {
-  if (!value) return "Never";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  if (!value) {
+    return "Never";
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function formatStatus(status) {
   switch (status) {
-    case "queued": return "Queued";
-    case "claimed": return "Claimed";
-    case "applied": return "Applied";
-    case "failed": return "Failed";
-    default: return status;
+    case "queued":
+      return "Queued";
+    case "claimed":
+      return "Claimed";
+    case "applied":
+      return "Applied";
+    case "failed":
+      return "Failed";
+    default:
+      return status;
   }
 }
 
 function summarizeOperation(operation) {
-  if (operation.type === "upsert_script") return `${operation.script_type} · ${operation.name}`;
-  if (operation.type === "ensure_instance") return `${operation.class_name} · ${operation.name}`;
-  if (operation.type === "delete_instance") return `Delete · ${operation.path}`;
+  if (operation.type === "upsert_script") {
+    return `${operation.script_type} · ${operation.name}`;
+  }
+  if (operation.type === "ensure_instance") {
+    return `${operation.class_name} · ${operation.name}`;
+  }
+  if (operation.type === "delete_instance") {
+    return `Delete · ${operation.path}`;
+  }
   return operation.description || operation.type || "Unknown operation";
 }
 
 function normalizeStudioAuth(value) {
-  if (!value || typeof value !== "object") return null;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
   const userId = Number(value.userId ?? value.studio_user_id ?? 0);
-  if (!Number.isFinite(userId) || userId <= 0) return null;
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return null;
+  }
   const username = String(value.username ?? value.studio_username ?? "").trim();
-  const displayName = String(value.displayName ?? value.studio_display_name ?? username).trim() || username;
+  const displayName =
+    String(value.displayName ?? value.studio_display_name ?? username).trim() || username;
   const authorizedAt = String(value.authorizedAt ?? value.studio_authorized_at ?? "").trim();
   return {
     userId,
     username,
     displayName,
     authorizedAt,
+  };
+}
+
+function normalizeRobloxProfile(user) {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  const metadata =
+    user.user_metadata && typeof user.user_metadata === "object"
+      ? user.user_metadata
+      : {};
+
+  const displayName =
+    [
+      metadata.preferred_username,
+      metadata.display_name,
+      metadata.name,
+      metadata.full_name,
+      metadata.user_name,
+      metadata.nickname,
+      typeof user.email === "string" && user.email.includes("@")
+        ? user.email.split("@")[0]
+        : "",
+    ]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "Roblox creator";
+
+  const username =
+    [
+      metadata.preferred_username,
+      metadata.user_name,
+      metadata.nickname,
+      metadata.name,
+      displayName,
+    ]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || displayName;
+
+  const avatarUrl =
+    [metadata.avatar_url, metadata.picture, metadata.profile_image]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "";
+
+  const profileUrl =
+    [metadata.profile, metadata.profile_url, metadata.website]
+      .map((value) => String(value || "").trim())
+      .find(Boolean) || "";
+
+  return {
+    displayName,
+    username,
+    avatarUrl,
+    profileUrl,
   };
 }
 
@@ -222,16 +480,124 @@ function BrandLockup() {
   );
 }
 
-// ─── Home Page ─────────────────────────────────────────────────────────────────
+function AuthModal({ open, onClose, onContinue, providerReady, pending, error }) {
+  if (!open) {
+    return null;
+  }
 
-function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath, workspaceName, pairCode, pluginOnline, studioAuth }) {
+  return (
+    <div className="overlay-shell" role="dialog" aria-modal="true" aria-label="Sign in with Roblox">
+      <div className="overlay-backdrop" onClick={onClose} />
+      <div className="auth-modal">
+        <button className="auth-modal-close" type="button" onClick={onClose} aria-label="Close sign in">
+          x
+        </button>
+        <div className="auth-modal-card">
+          <div className="auth-modal-copy">
+            <h2>Welcome to {PRODUCT_NAME}</h2>
+            <p>Let&apos;s set up your account.</p>
+            <button
+              className="primary-button auth-modal-button"
+              type="button"
+              onClick={onContinue}
+              disabled={!providerReady || pending}
+            >
+              {pending ? "Redirecting..." : "Sign in with Roblox"}
+            </button>
+            <ul className="auth-modal-list">
+              <li>Signing in takes you to the official Roblox website.</li>
+              <li>We only ask for your basic Roblox profile identity.</li>
+              <li>The Studio plugin comes after login, not before it.</li>
+            </ul>
+            {!providerReady ? (
+              <div className="auth-modal-warning">
+                Roblox sign-in is not configured on this deployment yet. Add the Roblox OAuth app in Supabase first.
+              </div>
+            ) : null}
+            {error ? <div className="auth-modal-error">{error}</div> : null}
+          </div>
+          <div className="auth-modal-preview">
+            <div className="auth-preview-brand">
+              <span className="brand-dot" />
+              <span>{PRODUCT_FULL_NAME}</span>
+            </div>
+            <div className="auth-preview-lock">Official Roblox redirect</div>
+            <div className="auth-preview-user">Roblox account</div>
+            <div className="auth-preview-panel">
+              <strong>Your personal profile</strong>
+              <div className="auth-preview-row">
+                <span>Read User ID</span>
+                <span>Low risk</span>
+              </div>
+              <div className="auth-preview-row">
+                <span>Read User Profile</span>
+                <span>Low risk</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnboardingModal({ open, onClose, onSelect }) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="overlay-shell" role="dialog" aria-modal="true" aria-label="Choose your setup">
+      <div className="overlay-backdrop" onClick={onClose} />
+      <div className="onboarding-modal">
+        <button className="auth-modal-close" type="button" onClick={onClose} aria-label="Close onboarding">
+          x
+        </button>
+        <div className="onboarding-copy">
+          <span className="onboarding-step">required · step 1 of 1</span>
+          <h2>Which best describes you now?</h2>
+        </div>
+        <div className="onboarding-grid">
+          {ONBOARDING_OPTIONS.map((option) => (
+            <button
+              className="onboarding-card"
+              key={option.id}
+              type="button"
+              onClick={() => onSelect(option)}
+            >
+              <strong>{option.title}</strong>
+              <p>{option.body}</p>
+              <span>{option.badge}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HomePage({
+  onPrimaryAction,
+  onOpenAuth,
+  onDownloadPlugin,
+  onCopyPairCode,
+  onCopyPluginPath,
+  workspaceName,
+  pairCode,
+  pluginOnline,
+  studioAuth,
+  authProfile,
+  isAuthenticated,
+  hasCompletedOnboarding,
+}) {
   const pageRef = useRef(null);
   const authPanelRef = useRef(null);
-  const hasStudioAuth = Boolean(studioAuth?.userId);
 
   useEffect(() => {
     const page = pageRef.current;
-    if (!page || typeof window === "undefined") return undefined;
+    if (!page || typeof window === "undefined") {
+      return undefined;
+    }
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const revealTargets = Array.from(page.querySelectorAll("[data-reveal]"));
@@ -248,7 +614,9 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
       updateScrollMotion();
 
       const handleScroll = () => {
-        if (frame) return;
+        if (frame) {
+          return;
+        }
         frame = window.requestAnimationFrame(updateScrollMotion);
       };
 
@@ -258,7 +626,9 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
         observer = new IntersectionObserver(
           (entries) => {
             entries.forEach((entry) => {
-              if (!entry.isIntersecting) return;
+              if (!entry.isIntersecting) {
+                return;
+              }
               entry.target.classList.add("is-visible");
               observer?.unobserve(entry.target);
             });
@@ -276,7 +646,9 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
 
       return () => {
         window.removeEventListener("scroll", handleScroll);
-        if (frame) window.cancelAnimationFrame(frame);
+        if (frame) {
+          window.cancelAnimationFrame(frame);
+        }
         observer?.disconnect();
         page.style.removeProperty("--home-scroll-progress");
       };
@@ -290,58 +662,88 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
   }, []);
 
   function handlePrimaryAction() {
-    if (hasStudioAuth) {
-      onEnter();
+    if (isAuthenticated) {
+      onPrimaryAction();
       return;
     }
 
-    authPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!isAuthenticated) {
+      onOpenAuth();
+      return;
+    }
   }
 
   return (
     <div className="home-page" ref={pageRef}>
       <nav className="home-nav">
         <div className="home-nav-inner">
-          <div className="brand-lockup">
-            <span className="brand-dot" />
-            <div>
-              <strong>{PRODUCT_NAME}</strong>
-              <span>Roblox AI builder</span>
-            </div>
-          </div>
-          <button className="primary-button home-nav-cta" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Open Workspace" : "Continue with Roblox Studio"} aria-label={hasStudioAuth ? "Open Workspace" : "Continue with Roblox Studio"}>
-            Open Studio →
+          <BrandLockup />
+          <button
+            className="primary-button home-nav-cta"
+            type="button"
+            onClick={handlePrimaryAction}
+            data-label={isAuthenticated ? (hasCompletedOnboarding ? "Dashboard" : "Finish setup") : "Sign up"}
+            aria-label={isAuthenticated ? (hasCompletedOnboarding ? "Dashboard" : "Finish setup") : "Sign up"}
+          >
+            Sign up
           </button>
         </div>
       </nav>
 
       <section className="home-hero">
         <div className="home-progress-line" aria-hidden="true" />
-        <div className="home-hero-eyebrow motion-reveal" data-reveal>Roblox Studio account authorization</div>
-        <h1 className="home-hero-headline motion-reveal" data-reveal style={{ "--reveal-delay": "80ms" }}>
-          Start on the homepage,<br />
-          <span className="home-hero-accent">then unlock with Studio.</span>
+        <div className="home-hero-eyebrow motion-reveal" data-reveal>
+          Sign in with Roblox · Build in Studio
+        </div>
+        <h1
+          className="home-hero-headline motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "80ms" }}
+        >
+          The easiest AI builder
+          <br />
+          <span className="home-hero-accent">for Roblox Studio.</span>
         </h1>
-        <p className="home-hero-sub motion-reveal" data-reveal style={{ "--reveal-delay": "140ms" }}>
-          Describe a mechanic, UI, or system. Zest writes the Lua and pushes it
-          straight into Roblox Studio — no copy-paste, no friction.
+        <p
+          className="home-hero-sub motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "140ms" }}
+        >
+          Sign in with Roblox on the web, choose your workspace, then let the plugin
+          sync generated systems straight into Studio.
         </p>
-        <div className="home-hero-actions motion-reveal" data-reveal style={{ "--reveal-delay": "200ms" }}>
-          <button className="primary-button home-hero-btn" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Enter Zest Studio" : "Authorize with Studio"} aria-label={hasStudioAuth ? "Enter Zest Studio" : "Authorize with Studio"}>
-            Start building free
+        <div
+          className="home-hero-actions motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "200ms" }}
+        >
+          <button
+            className="primary-button home-hero-btn"
+            type="button"
+            onClick={handlePrimaryAction}
+            data-label={isAuthenticated ? (hasCompletedOnboarding ? "Open workspace" : "Continue setup") : "Start prototyping"}
+            aria-label={isAuthenticated ? (hasCompletedOnboarding ? "Open workspace" : "Continue setup") : "Start prototyping"}
+          >
+            Start prototyping
           </button>
           <span className="home-hero-note home-hero-note-dynamic">
-            {hasStudioAuth ? `Authorized as @${studioAuth?.username || studioAuth?.displayName || "creator"}` : "Plugin-first login · Roblox Studio account required"}
+            {isAuthenticated
+              ? `Signed in as @${authProfile?.username || authProfile?.displayName || "creator"}`
+              : "Official Roblox redirect · Plugin setup comes after login"}
           </span>
-          <span className="home-hero-note">Free models available · No account needed to try</span>
+          <span className="home-hero-note">Free models available · Install the plugin after login</span>
         </div>
 
-        <div className="home-terminal motion-reveal" data-reveal style={{ "--reveal-delay": "260ms" }}>
+        <div
+          className="home-terminal motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "260ms" }}
+        >
           <div className="home-terminal-bar">
             <span className="home-terminal-dot" style={{ background: "#ff5f56" }} />
             <span className="home-terminal-dot" style={{ background: "#ffbd2e" }} />
             <span className="home-terminal-dot" style={{ background: "#27c93f" }} />
-            <span className="home-terminal-title">Zest Studio · Workspace</span>
+            <span className="home-terminal-title">{PRODUCT_FULL_NAME} · Workspace</span>
           </div>
           <div className="home-terminal-body">
             <div className="home-terminal-msg home-terminal-msg-user">
@@ -349,12 +751,14 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
               <p>Create a round director with lobby countdown, teleport, and win reward screen.</p>
             </div>
             <div className="home-terminal-msg home-terminal-msg-ai">
-              <span className="home-terminal-tag" style={{ color: "#c7ef5d" }}>Zest</span>
-              <p>Planning round flow system… generating 4 scripts and 2 RemoteEvents. Job queued — Studio will apply in ~3 seconds.</p>
+              <span className="home-terminal-tag" style={{ color: "#c7ef5d" }}>
+                {PRODUCT_NAME}
+              </span>
+              <p>Planning round flow system... generating 4 scripts and 2 RemoteEvents. Job queued and waiting for Studio sync.</p>
             </div>
             <div className="home-terminal-status">
               <span className="status-dot status-dot-live" />
-              Studio connected · Job applied ✓
+              Website account ready · Studio sync optional until you pair
             </div>
           </div>
         </div>
@@ -364,37 +768,56 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
         <div className="home-section-inner">
           <div className="home-auth-card motion-reveal" data-reveal ref={authPanelRef}>
             <div className="home-auth-copy">
-              <span className={`home-auth-status ${hasStudioAuth ? "home-auth-status-live" : pluginOnline ? "home-auth-status-waiting" : ""}`}>
-                {hasStudioAuth ? "Authorized" : pluginOnline ? "Studio connected" : "Waiting for Studio"}
+              <span
+                className={`home-auth-status ${
+                  isAuthenticated
+                    ? "home-auth-status-live"
+                    : pluginOnline
+                      ? "home-auth-status-waiting"
+                      : ""
+                }`}
+              >
+                {isAuthenticated ? "Signed in with Roblox" : pluginOnline ? "Studio connected" : "Waiting for login"}
               </span>
-              <h2>{hasStudioAuth ? "Your Roblox Studio account is verified." : "Authorize from the homepage before you start building."}</h2>
+              <h2>{isAuthenticated ? "Your Roblox account is ready." : "Sign in with Roblox before you start building."}</h2>
               <p>
-                {hasStudioAuth
-                  ? `Zest recognized ${studioAuth?.displayName || studioAuth?.username || "your Roblox account"} from Roblox Studio. You can enter the workspace now and start generating systems.`
-                  : "Download the plugin, open Roblox Studio, and use the pair code below. The plugin reads the account already signed into Studio and sends that authorization back to the site."}
+                {isAuthenticated
+                  ? `You are signed in as ${authProfile?.displayName || authProfile?.username || "your Roblox account"}. Next, install the plugin, pair ${workspaceName}, and start syncing jobs into Studio.`
+                  : "Use the homepage sign-in to go through Roblox's official consent screen. After that, you can install the plugin and connect Studio to this workspace."}
               </p>
 
-              {hasStudioAuth ? (
+              {isAuthenticated ? (
                 <div className="home-auth-user">
-                  <strong>@{studioAuth?.username || studioAuth?.displayName || "roblox-user"}</strong>
-                  <span>Roblox user ID {studioAuth?.userId}</span>
-                  <span>{studioAuth?.authorizedAt ? `Authorized ${formatDateTime(studioAuth.authorizedAt)}` : "Authorized from Studio"}</span>
+                  <strong>@{authProfile?.username || authProfile?.displayName || "roblox-user"}</strong>
+                  <span>{authProfile?.profileUrl ? authProfile.profileUrl : "Basic Roblox profile granted"}</span>
+                  <span>
+                    {studioAuth?.authorizedAt
+                      ? `Studio paired ${formatDateTime(studioAuth.authorizedAt)}`
+                      : pluginOnline
+                        ? "Studio is online for this workspace"
+                        : "Studio not paired yet"}
+                  </span>
                 </div>
               ) : (
                 <div className="home-auth-action-row">
-                  <button className="primary-button home-auth-enter" type="button" onClick={onDownloadPlugin}>
-                    Download Plugin
+                  <button className="primary-button home-auth-enter" type="button" onClick={onOpenAuth}>
+                    Sign in with Roblox
                   </button>
-                  <button className="secondary-button" type="button" onClick={() => onCopyPairCode(pairCode)}>
-                    Copy Pair Code
+                  <button className="secondary-button" type="button" onClick={onDownloadPlugin}>
+                    Download Plugin
                   </button>
                 </div>
               )}
 
               <div className="home-auth-action-row">
-                {hasStudioAuth ? (
-                  <button className="primary-button home-auth-enter" type="button" onClick={onEnter}>
-                    Continue to Workspace
+                {isAuthenticated ? (
+                  <button className="primary-button home-auth-enter" type="button" onClick={onPrimaryAction}>
+                    {hasCompletedOnboarding ? "Continue to Workspace" : "Finish setup"}
+                  </button>
+                ) : null}
+                {isAuthenticated ? (
+                  <button className="secondary-button" type="button" onClick={() => onCopyPairCode(pairCode)}>
+                    Copy Pair Code
                   </button>
                 ) : null}
                 <button className="text-button" type="button" onClick={onCopyPluginPath}>
@@ -406,19 +829,19 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
             <div className="home-auth-steps">
               <div className="home-auth-step">
                 <span>01</span>
-                <strong>Install the plugin</strong>
-                <p>Download the Zest plugin, move it into your Roblox Plugins folder, then restart Studio.</p>
+                <strong>Sign in with Roblox</strong>
+                <p>Use the homepage button and complete the official Roblox consent flow before you open the builder.</p>
               </div>
               <div className="home-auth-step">
                 <span>02</span>
-                <strong>Paste this pair code</strong>
-                <div className="home-auth-pair">{pairCode || "PAIR-CODE"}</div>
-                <p>Open the plugin inside Studio and use this code to authorize the current workspace.</p>
+                <strong>Install the plugin</strong>
+                <p>Drop the Zest plugin into your Roblox Plugins folder and restart Studio once.</p>
               </div>
               <div className="home-auth-step">
                 <span>03</span>
-                <strong>Use your Studio account</strong>
-                <p>The plugin reads the Roblox account already signed into Studio and sends it back so Zest can unlock the app.</p>
+                <strong>Paste this pair code</strong>
+                <div className="home-auth-pair">{pairCode || "PAIR-CODE"}</div>
+                <p>Open the plugin inside Studio and use this code to pair {workspaceName} with the web app.</p>
               </div>
             </div>
           </div>
@@ -427,13 +850,20 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
 
       <section className="home-features">
         <div className="home-section-inner">
-          <h2 className="home-section-title motion-reveal" data-reveal>Everything you need to ship faster</h2>
+          <h2 className="home-section-title motion-reveal" data-reveal>
+            Everything you need to ship faster
+          </h2>
           <div className="home-feature-grid">
-            {HOME_FEATURES.map((f, index) => (
-              <div className="home-feature-card motion-reveal" data-reveal key={f.title} style={{ "--reveal-delay": `${80 + index * 70}ms` }}>
-                <div className="home-feature-icon">{f.icon}</div>
-                <h3>{f.title}</h3>
-                <p>{f.body}</p>
+            {HOME_FEATURES.map((feature, index) => (
+              <div
+                className="home-feature-card motion-reveal"
+                data-reveal
+                key={feature.title}
+                style={{ "--reveal-delay": `${80 + index * 70}ms` }}
+              >
+                <div className="home-feature-icon">{feature.icon}</div>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
               </div>
             ))}
           </div>
@@ -442,13 +872,20 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
 
       <section className="home-steps">
         <div className="home-section-inner">
-          <h2 className="home-section-title motion-reveal" data-reveal>How it works</h2>
+          <h2 className="home-section-title motion-reveal" data-reveal>
+            How it works
+          </h2>
           <div className="home-steps-grid">
-            {HOME_STEPS.map((s, index) => (
-              <div className="home-step motion-reveal" data-reveal key={s.num} style={{ "--reveal-delay": `${80 + index * 90}ms` }}>
-                <div className="home-step-num">{s.num}</div>
-                <h3>{s.label}</h3>
-                <p>{s.body}</p>
+            {HOME_STEPS.map((step, index) => (
+              <div
+                className="home-step motion-reveal"
+                data-reveal
+                key={step.num}
+                style={{ "--reveal-delay": `${80 + index * 90}ms` }}
+              >
+                <div className="home-step-num">{step.num}</div>
+                <h3>{step.label}</h3>
+                <p>{step.body}</p>
               </div>
             ))}
           </div>
@@ -457,9 +894,15 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
 
       <section className="home-cta-band">
         <div className="home-section-inner home-cta-inner motion-reveal" data-reveal>
-          <h2>{hasStudioAuth ? "You are cleared to build." : "Authorize Studio, then enter the builder."}</h2>
-          <p>{hasStudioAuth ? "Your Roblox Studio account is recognized. Jump into the workspace and start queuing systems." : "The homepage stays locked until Roblox Studio confirms the signed-in account through the plugin."}</p>
-          <button className="primary-button home-hero-btn" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Open Zest Studio" : "Finish Studio Authorization"} aria-label={hasStudioAuth ? "Open Zest Studio" : "Finish Studio Authorization"}>
+          <h2>{isAuthenticated ? "You are ready to build." : "Sign in first, then connect Studio."}</h2>
+          <p>{isAuthenticated ? "Open the workspace, install the plugin, and start sending systems into Roblox Studio." : "The website account comes first. Studio pairing happens after you are through Roblox sign-in."}</p>
+          <button
+            className="primary-button home-hero-btn"
+            type="button"
+            onClick={handlePrimaryAction}
+            data-label={isAuthenticated ? (hasCompletedOnboarding ? "Open Zest Studio" : "Continue setup") : "Sign up with Roblox"}
+            aria-label={isAuthenticated ? (hasCompletedOnboarding ? "Open Zest Studio" : "Continue setup") : "Sign up with Roblox"}
+          >
             Open Zest Studio
           </button>
         </div>
@@ -475,8 +918,6 @@ function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath,
   );
 }
 
-// ─── Workspace ─────────────────────────────────────────────────────────────────
-
 function App() {
   const [view, setView] = useState("home");
   const [app, setApp] = useState(loadAppState);
@@ -487,83 +928,208 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState("");
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authPending, setAuthPending] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [authSession, setAuthSession] = useState(null);
   const textareaRef = useRef(null);
 
-  const activeProject = app.projects.find((p) => p.id === app.activeProjectId) || app.projects[0];
-  const availableModels = workspaceState.modelCatalog?.length ? workspaceState.modelCatalog : LOCAL_MODEL_CATALOG;
-  const selectedModel = availableModels.find((m) => m.key === activeProject?.modelKey) || availableModels[0];
-  const selectedPacks = useMemo(() => PACK_LIBRARY.filter((p) => activeProject?.selectedPacks?.includes(p.id)), [activeProject]);
-  const orderedMessages = useMemo(() => [...(workspaceState.messages || [])].reverse(), [workspaceState.messages]);
+  const activeProject = app.projects.find((project) => project.id === app.activeProjectId) || app.projects[0];
+  const supabase = useMemo(() => {
+    if (!app.supabaseUrl.trim() || !app.supabaseAnonKey.trim()) {
+      return null;
+    }
+
+    return getBrowserSupabaseClient(app.supabaseUrl.trim(), app.supabaseAnonKey.trim());
+  }, [app.supabaseAnonKey, app.supabaseUrl]);
+  const availableModels =
+    workspaceState.modelCatalog?.length ? workspaceState.modelCatalog : LOCAL_MODEL_CATALOG;
+  const selectedModel =
+    availableModels.find((model) => model.key === activeProject?.modelKey) || availableModels[0];
+  const selectedPacks = useMemo(
+    () => PACK_LIBRARY.filter((pack) => activeProject?.selectedPacks?.includes(pack.id)),
+    [activeProject],
+  );
+  const orderedMessages = useMemo(
+    () => [...(workspaceState.messages || [])].reverse(),
+    [workspaceState.messages],
+  );
   const recentJobs = workspaceState.jobs || [];
-  const pluginPairCode = useMemo(() => formatPairCode(pairCodeFromWorkspaceToken(activeProject?.workspaceToken || "")), [activeProject?.workspaceToken]);
+  const pluginPairCode = useMemo(
+    () => formatPairCode(pairCodeFromWorkspaceToken(activeProject?.workspaceToken || "")),
+    [activeProject?.workspaceToken],
+  );
   const studioAuth = useMemo(
     () => normalizeStudioAuth(workspaceState.workspace) || normalizeStudioAuth(app.studioAuth),
     [workspaceState.workspace, app.studioAuth],
   );
-  const hasStudioAuth = Boolean(studioAuth?.userId);
+  const authUser = authSession?.user || null;
+  const authProfile = useMemo(() => normalizeRobloxProfile(authUser), [authUser]);
+  const isAuthenticated = Boolean(authUser?.id);
+  const robloxProvider = workspaceState.authProviders?.roblox || null;
+  const isRobloxProviderReady = Boolean(robloxProvider?.configured && robloxProvider?.enabled);
+  const onboardingState = authUser?.id ? app.onboardingByUser?.[authUser.id] || null : null;
+  const hasCompletedOnboarding = Boolean(onboardingState?.path);
   const pluginSnippet = useMemo(
-    () => JSON.stringify({ supabaseUrl: app.supabaseUrl.trim(), publicKey: app.supabaseAnonKey.trim(), workspaceToken: activeProject?.workspaceToken || "", projectName: activeProject?.name || "", pairCode: pluginPairCode }, null, 2),
+    () =>
+      JSON.stringify(
+        {
+          supabaseUrl: app.supabaseUrl.trim(),
+          publicKey: app.supabaseAnonKey.trim(),
+          workspaceToken: activeProject?.workspaceToken || "",
+          projectName: activeProject?.name || "",
+          pairCode: pluginPairCode,
+        },
+        null,
+        2,
+      ),
     [activeProject?.name, activeProject?.workspaceToken, app.supabaseAnonKey, app.supabaseUrl, pluginPairCode],
   );
 
-  useEffect(() => { document.title = PRODUCT_FULL_NAME; }, []);
+  useEffect(() => {
+    document.title = PRODUCT_FULL_NAME;
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(app));
   }, [app]);
 
   useEffect(() => {
-    if (view === "workspace" && !hasStudioAuth) {
+    if (view === "workspace" && (!isAuthenticated || !hasCompletedOnboarding)) {
       setView("home");
     }
-  }, [hasStudioAuth, view]);
+  }, [hasCompletedOnboarding, isAuthenticated, view]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true);
+      setAuthSession(null);
+      return undefined;
+    }
+
+    let active = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) {
+        return;
+      }
+      setAuthSession(data.session || null);
+      setAuthReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) {
+        return;
+      }
+
+      setAuthSession(session || null);
+      setAuthReady(true);
+      setAuthPending(false);
+      setAuthError("");
+      if (session) {
+        setAuthModalOpen(false);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (authReady && isAuthenticated && !hasCompletedOnboarding) {
+      setOnboardingOpen(true);
+    }
+  }, [authReady, hasCompletedOnboarding, isAuthenticated]);
 
   function updateApp(key, value) {
-    setApp((c) => ({ ...c, [key]: value }));
+    setApp((current) => ({ ...current, [key]: value }));
   }
 
   function updateActiveProject(patch) {
-    setApp((c) => ({
-      ...c,
-      projects: c.projects.map((p) => p.id === c.activeProjectId ? { ...p, ...patch } : p),
+    setApp((current) => ({
+      ...current,
+      projects: current.projects.map((project) =>
+        project.id === current.activeProjectId ? { ...project, ...patch } : project,
+      ),
+    }));
+  }
+
+  function saveOnboardingChoice(choice) {
+    if (!authUser?.id) {
+      return;
+    }
+
+    setApp((current) => ({
+      ...current,
+      onboardingByUser: {
+        ...(current.onboardingByUser || {}),
+        [authUser.id]: {
+          path: choice.id,
+          title: choice.title,
+          completedAt: new Date().toISOString(),
+        },
+      },
     }));
   }
 
   function syncProjectFromServer(projectSummary) {
-    if (!projectSummary?.workspaceToken) return;
-    setApp((c) => ({
-      ...c,
-      projects: c.projects.map((p) =>
-        p.workspaceToken === projectSummary.workspaceToken
-          ? { ...p, name: projectSummary.name || p.name, description: projectSummary.description ?? p.description, modelKey: projectSummary.modelKey || p.modelKey, selectedPacks: Array.isArray(projectSummary.selectedPacks) ? projectSummary.selectedPacks : p.selectedPacks }
-          : p,
-        ),
+    if (!projectSummary?.workspaceToken) {
+      return;
+    }
+
+    setApp((current) => ({
+      ...current,
+      projects: current.projects.map((project) =>
+        project.workspaceToken === projectSummary.workspaceToken
+          ? {
+              ...project,
+              name: projectSummary.name || project.name,
+              description: projectSummary.description ?? project.description,
+              modelKey: projectSummary.modelKey || project.modelKey,
+              selectedPacks: Array.isArray(projectSummary.selectedPacks)
+                ? projectSummary.selectedPacks
+                : project.selectedPacks,
+            }
+          : project,
+      ),
     }));
   }
 
   function syncStudioAuthFromServer(workspace) {
     const nextStudioAuth = normalizeStudioAuth(workspace);
-    if (!nextStudioAuth) return;
-    setApp((c) => {
-      const current = normalizeStudioAuth(c.studioAuth);
+    if (!nextStudioAuth) {
+      return;
+    }
+
+    setApp((current) => {
+      const existing = normalizeStudioAuth(current.studioAuth);
       if (
-        current?.userId === nextStudioAuth.userId &&
-        current?.username === nextStudioAuth.username &&
-        current?.displayName === nextStudioAuth.displayName &&
-        current?.authorizedAt === nextStudioAuth.authorizedAt
+        existing?.userId === nextStudioAuth.userId &&
+        existing?.username === nextStudioAuth.username &&
+        existing?.displayName === nextStudioAuth.displayName &&
+        existing?.authorizedAt === nextStudioAuth.authorizedAt
       ) {
-        return c;
+        return current;
       }
 
       return {
-        ...c,
+        ...current,
         studioAuth: nextStudioAuth,
       };
     });
   }
 
   async function copyText(value, label) {
-    if (!value) return;
+    if (!value) {
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(value);
       setCopyFeedback(`${label} copied.`);
@@ -587,10 +1153,16 @@ function App() {
 
   async function refreshWorkspace({ ensure = false, silent = false } = {}) {
     if (!app.supabaseUrl.trim() || !app.supabaseAnonKey.trim() || !activeProject?.workspaceToken) {
-      if (!silent) setError("Missing Supabase settings or workspace token.");
+      if (!silent) {
+        setError("Missing Supabase settings or workspace token.");
+      }
       return;
     }
-    if (!silent) setIsRefreshing(true);
+
+    if (!silent) {
+      setIsRefreshing(true);
+    }
+
     try {
       const payload = await callEdgeFunction(app.supabaseUrl, app.supabaseAnonKey, "workspace-state", {
         workspaceToken: activeProject.workspaceToken,
@@ -604,21 +1176,38 @@ function App() {
       syncProjectFromServer(payload.project);
       syncStudioAuthFromServer(payload.workspace);
       setLastSyncedAt(new Date().toISOString());
-      if (!silent) setError("");
+      if (!silent) {
+        setError("");
+      }
     } catch (nextError) {
-      if (!silent) setError(nextError.message);
+      if (!silent) {
+        setError(nextError.message);
+      }
     } finally {
       setIsRefreshing(false);
     }
   }
 
   useEffect(() => {
-    if (!activeProject?.workspaceToken || !app.supabaseUrl.trim() || !app.supabaseAnonKey.trim()) return undefined;
+    if (!activeProject?.workspaceToken || !app.supabaseUrl.trim() || !app.supabaseAnonKey.trim()) {
+      return undefined;
+    }
+
     refreshWorkspace({ ensure: true, silent: true });
     const pollMs = Math.max(Number(app.pollingSeconds) || 4, 2) * 1000;
-    const interval = window.setInterval(() => refreshWorkspace({ ensure: false, silent: true }), pollMs);
+    const interval = window.setInterval(
+      () => refreshWorkspace({ ensure: false, silent: true }),
+      pollMs,
+    );
     return () => window.clearInterval(interval);
-  }, [activeProject?.id, activeProject?.workspaceToken, activeProject?.modelKey, app.pollingSeconds, app.supabaseAnonKey, app.supabaseUrl]);
+  }, [
+    activeProject?.id,
+    activeProject?.workspaceToken,
+    activeProject?.modelKey,
+    app.pollingSeconds,
+    app.supabaseAnonKey,
+    app.supabaseUrl,
+  ]);
 
   async function saveWorkspace() {
     await refreshWorkspace({ ensure: true, silent: false });
@@ -626,11 +1215,22 @@ function App() {
 
   async function submitPrompt(event) {
     event.preventDefault();
-    if (!prompt.trim()) { setError("Write a prompt first."); return; }
-    if (!activeProject?.workspaceToken) { setError("Create a workspace first."); return; }
-    if (!hasStudioAuth) { setError("Authorize Roblox Studio from the homepage first."); return; }
+    if (!prompt.trim()) {
+      setError("Write a prompt first.");
+      return;
+    }
+    if (!activeProject?.workspaceToken) {
+      setError("Create a workspace first.");
+      return;
+    }
+    if (!isAuthenticated) {
+      setError("Sign in with Roblox from the homepage first.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
+
     try {
       await refreshWorkspace({ ensure: true, silent: true });
       const payload = await callEdgeFunction(app.supabaseUrl, app.supabaseAnonKey, "generate-job", {
@@ -652,7 +1252,6 @@ function App() {
     }
   }
 
-  // Ctrl+Enter to submit
   function handleTextareaKeyDown(event) {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
@@ -662,41 +1261,130 @@ function App() {
 
   function addProject() {
     const project = createDefaultProject({ name: `Workspace ${app.projects.length + 1}` });
-    setApp((c) => ({ ...c, projects: [project, ...c.projects], activeProjectId: project.id }));
+    setApp((current) => ({
+      ...current,
+      projects: [project, ...current.projects],
+      activeProjectId: project.id,
+    }));
     setWorkspaceState(emptyWorkspaceState());
     setPrompt("");
     setError("");
   }
 
   function removeProject(projectId) {
-    if (app.projects.length === 1) return;
-    const remaining = app.projects.filter((p) => p.id !== projectId);
-    setApp((c) => ({
-      ...c,
+    if (app.projects.length === 1) {
+      return;
+    }
+    const remaining = app.projects.filter((project) => project.id !== projectId);
+    setApp((current) => ({
+      ...current,
       projects: remaining,
-      activeProjectId: c.activeProjectId === projectId ? remaining[0]?.id || c.activeProjectId : c.activeProjectId,
+      activeProjectId:
+        current.activeProjectId === projectId
+          ? remaining[0]?.id || current.activeProjectId
+          : current.activeProjectId,
     }));
   }
 
   function togglePack(packId) {
-    if (!activeProject) return;
+    if (!activeProject) {
+      return;
+    }
     const current = activeProject.selectedPacks || [];
-    const next = current.includes(packId) ? current.filter((id) => id !== packId) : [...current, packId];
+    const next = current.includes(packId)
+      ? current.filter((id) => id !== packId)
+      : [...current, packId];
     updateActiveProject({ selectedPacks: next });
+  }
+
+  async function startRobloxSignIn() {
+    if (!supabase) {
+      setAuthError("Supabase settings are missing on this deployment.");
+      return;
+    }
+
+    if (!isRobloxProviderReady) {
+      setAuthError("Roblox sign-in is not configured yet. Add the Roblox OAuth app in Supabase first.");
+      return;
+    }
+
+    setAuthPending(true);
+    setAuthError("");
+    const { error: nextError } = await supabase.auth.signInWithOAuth({
+      provider: "custom:roblox",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "openid profile",
+      },
+    });
+
+    if (nextError) {
+      setAuthPending(false);
+      setAuthError(nextError.message);
+    }
+  }
+
+  async function signOutRoblox() {
+    if (!supabase) {
+      return;
+    }
+    await supabase.auth.signOut();
+    setView("home");
+    setOnboardingOpen(false);
+  }
+
+  function handlePrimaryHomeAction() {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    if (!hasCompletedOnboarding) {
+      setOnboardingOpen(true);
+      return;
+    }
+
+    setView("workspace");
   }
 
   if (view === "home") {
     return (
-      <HomePage
-        onEnter={() => setView("workspace")}
-        onDownloadPlugin={downloadPluginFile}
-        onCopyPairCode={(value) => copyText(value, "Pair code")}
-        onCopyPluginPath={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
-        workspaceName={activeProject?.name || "Starter Workspace"}
-        pairCode={pluginPairCode || "NO-CODE-YET"}
-        pluginOnline={workspaceState.pluginOnline}
-        studioAuth={studioAuth}
-      />
+      <>
+        <HomePage
+          onPrimaryAction={handlePrimaryHomeAction}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onDownloadPlugin={downloadPluginFile}
+          onCopyPairCode={(value) => copyText(value, "Pair code")}
+          onCopyPluginPath={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
+          workspaceName={activeProject?.name || "Starter Workspace"}
+          pairCode={pluginPairCode || "NO-CODE-YET"}
+          pluginOnline={workspaceState.pluginOnline}
+          studioAuth={studioAuth}
+          authProfile={authProfile}
+          isAuthenticated={isAuthenticated}
+          hasCompletedOnboarding={hasCompletedOnboarding}
+        />
+        <AuthModal
+          open={authModalOpen}
+          onClose={() => {
+            setAuthError("");
+            setAuthModalOpen(false);
+          }}
+          onContinue={startRobloxSignIn}
+          providerReady={isRobloxProviderReady}
+          pending={authPending}
+          error={authError}
+        />
+        <OnboardingModal
+          open={onboardingOpen}
+          onClose={() => setOnboardingOpen(false)}
+          onSelect={(choice) => {
+            saveOnboardingChoice(choice);
+            setOnboardingOpen(false);
+            setView("workspace");
+          }}
+        />
+      </>
     );
   }
 
@@ -706,9 +1394,15 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-top">
             <button className="home-back-btn" type="button" onClick={() => setView("home")}>
-              ← Home
+              Back Home
             </button>
             <BrandLockup />
+            {isAuthenticated ? (
+              <div className="studio-identity-card">
+                <strong>@{authProfile?.username || authProfile?.displayName || "creator"}</strong>
+                <span>Signed in with Roblox</span>
+              </div>
+            ) : null}
             <button className="primary-button new-workspace-button" type="button" onClick={addProject}>
               + New Workspace
             </button>
@@ -724,14 +1418,22 @@ function App() {
                     className={`workspace-item ${active ? "workspace-item-active" : ""}`}
                     key={project.id}
                     type="button"
-                    onClick={() => setApp((c) => ({ ...c, activeProjectId: project.id }))}
+                    onClick={() => setApp((current) => ({ ...current, activeProjectId: project.id }))}
                   >
                     <div className="workspace-item-copy">
                       <strong>{project.name}</strong>
                       <span>{project.description}</span>
                     </div>
                     {app.projects.length > 1 ? (
-                      <span className="workspace-item-remove" onClick={(e) => { e.stopPropagation(); removeProject(project.id); }}>×</span>
+                      <span
+                        className="workspace-item-remove"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeProject(project.id);
+                        }}
+                      >
+                        x
+                      </span>
                     ) : null}
                   </button>
                 );
@@ -743,7 +1445,9 @@ function App() {
             <div className="sidebar-label">Pair Code</div>
             <div className="sidebar-card">
               <div className="pair-code">{pluginPairCode || "NO-CODE-YET"}</div>
-              <button className="text-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>Copy pair code</button>
+              <button className="text-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>
+                Copy pair code
+              </button>
             </div>
           </div>
 
@@ -757,11 +1461,19 @@ function App() {
               {studioAuth ? (
                 <div className="studio-identity-card">
                   <strong>@{studioAuth.username || studioAuth.displayName || "creator"}</strong>
-                  <span>Authorized with Roblox Studio</span>
+                  <span>Paired from Roblox Studio</span>
                 </div>
               ) : null}
-              <button className="secondary-button" type="button" onClick={downloadPluginFile}>Download Plugin</button>
-              <button className="text-button" type="button" onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}>Copy plugin path hint</button>
+              <button className="secondary-button" type="button" onClick={downloadPluginFile}>
+                Download Plugin
+              </button>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
+              >
+                Copy plugin path hint
+              </button>
             </div>
           </div>
         </aside>
@@ -773,23 +1485,32 @@ function App() {
               <p>
                 {workspaceState.pluginOnline
                   ? "Roblox Studio is connected and checking for jobs."
-                  : "Use the plugin in Roblox Studio, connect with the pair code, then start sync."}
+                  : "Install the plugin in Roblox Studio, connect with the pair code, then start sync."}
               </p>
             </div>
             <div className="main-header-actions">
               <label className="model-select-shell">
                 <span>Model</span>
-                <select value={activeProject?.modelKey || ""} onChange={(e) => updateActiveProject({ modelKey: e.target.value })}>
+                <select
+                  value={activeProject?.modelKey || ""}
+                  onChange={(event) => updateActiveProject({ modelKey: event.target.value })}
+                >
                   {availableModels.map((model) => (
                     <option disabled={!model.enabled} key={model.key} value={model.key}>
-                      {model.label} · {model.providerLabel}{!model.enabled ? " (setup needed)" : ""}
+                      {model.label} · {model.providerLabel}
+                      {!model.enabled ? " (setup needed)" : ""}
                     </option>
                   ))}
                 </select>
               </label>
               <button className="secondary-button" type="button" onClick={saveWorkspace} disabled={isRefreshing}>
-                {isRefreshing ? "Syncing…" : "Save"}
+                {isRefreshing ? "Syncing..." : "Save"}
               </button>
+              {isAuthenticated ? (
+                <button className="secondary-button" type="button" onClick={signOutRoblox}>
+                  Sign out
+                </button>
+              ) : null}
             </div>
           </header>
 
@@ -799,7 +1520,12 @@ function App() {
                 {orderedMessages.length ? (
                   <div className="message-list">
                     {orderedMessages.map((message) => (
-                      <div className={`message-row ${message.role === "user" ? "message-row-user" : "message-row-assistant"}`} key={message.id}>
+                      <div
+                        className={`message-row ${
+                          message.role === "user" ? "message-row-user" : "message-row-assistant"
+                        }`}
+                        key={message.id}
+                      >
                         <div className={`message-bubble message-bubble-${message.role}`}>
                           <div className="message-role">{message.role === "user" ? "You" : PRODUCT_NAME}</div>
                           <div className="message-content">{message.content}</div>
@@ -814,7 +1540,15 @@ function App() {
                     <p>Start with a prompt below. The app will queue a structured plan, and the Studio plugin can claim and apply it automatically.</p>
                     <div className="suggestion-grid">
                       {PROMPT_SUGGESTIONS.map((suggestion) => (
-                        <button className="suggestion-card" key={suggestion} type="button" onClick={() => { setPrompt(suggestion); textareaRef.current?.focus(); }}>
+                        <button
+                          className="suggestion-card"
+                          key={suggestion}
+                          type="button"
+                          onClick={() => {
+                            setPrompt(suggestion);
+                            textareaRef.current?.focus();
+                          }}
+                        >
                           {suggestion}
                         </button>
                       ))}
@@ -830,21 +1564,21 @@ function App() {
                   <textarea
                     ref={textareaRef}
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(event) => setPrompt(event.target.value)}
                     onKeyDown={handleTextareaKeyDown}
-                    placeholder="Describe a mechanic, UI, or system you want Zest to build in Roblox Studio…"
+                    placeholder="Describe a mechanic, UI, or system you want Zest to build in Roblox Studio..."
                     rows={4}
                   />
                   <div className="composer-footer">
                     <div className="composer-meta">
                       <span className="composer-pill">{selectedModel?.label || "No model"}</span>
-                      <span className="composer-pill">{workspaceState.accessMode || "guest"}</span>
+                      <span className="composer-pill">{isAuthenticated ? "roblox" : workspaceState.accessMode || "guest"}</span>
                       <span className="composer-pill">{workspaceState.pluginOnline ? "Studio ready" : "Studio not paired"}</span>
                     </div>
                     <div className="composer-send-group">
                       <span className="composer-hint">Ctrl+Enter to send</span>
-                      <button className="primary-button" type="submit" disabled={isSubmitting || !hasStudioAuth}>
-                        {isSubmitting ? "Generating…" : "Send"}
+                      <button className="primary-button" type="submit" disabled={isSubmitting || !isAuthenticated}>
+                        {isSubmitting ? "Generating..." : "Send"}
                       </button>
                     </div>
                   </div>
@@ -858,36 +1592,81 @@ function App() {
                   <h2>Project Settings</h2>
                   <span>{lastSyncedAt ? `Synced ${formatDateTime(lastSyncedAt)}` : "Not synced"}</span>
                 </div>
-                <label className="field"><span>Name</span><input value={activeProject?.name || ""} onChange={(e) => updateActiveProject({ name: e.target.value })} /></label>
+                <label className="field">
+                  <span>Name</span>
+                  <input
+                    value={activeProject?.name || ""}
+                    onChange={(event) => updateActiveProject({ name: event.target.value })}
+                  />
+                </label>
                 <label className="field">
                   <span>Description</span>
-                  <textarea rows={3} value={activeProject?.description || ""} onChange={(e) => updateActiveProject({ description: e.target.value })} />
+                  <textarea
+                    rows={3}
+                    value={activeProject?.description || ""}
+                    onChange={(event) => updateActiveProject({ description: event.target.value })}
+                  />
                 </label>
                 <label className="field">
                   <span>Polling seconds</span>
-                  <input type="number" min="2" max="30" value={app.pollingSeconds} onChange={(e) => updateApp("pollingSeconds", e.target.value)} />
+                  <input
+                    type="number"
+                    min="2"
+                    max="30"
+                    value={app.pollingSeconds}
+                    onChange={(event) => updateApp("pollingSeconds", event.target.value)}
+                  />
                 </label>
                 <details className="details-block">
                   <summary>Advanced</summary>
-                  <label className="field"><span>Supabase project URL</span><input value={app.supabaseUrl} onChange={(e) => updateApp("supabaseUrl", e.target.value)} placeholder="https://your-project.supabase.co" /></label>
-                  <label className="field"><span>Supabase public key</span><textarea rows={4} value={app.supabaseAnonKey} onChange={(e) => updateApp("supabaseAnonKey", e.target.value)} placeholder="Publishable or anon key" /></label>
-                  <label className="field"><span>Workspace token</span><input value={activeProject?.workspaceToken || ""} readOnly /></label>
-                  <label className="field"><span>Advanced plugin payload</span><textarea rows={8} readOnly value={pluginSnippet} /></label>
+                  <label className="field">
+                    <span>Supabase project URL</span>
+                    <input
+                      value={app.supabaseUrl}
+                      onChange={(event) => updateApp("supabaseUrl", event.target.value)}
+                      placeholder="https://your-project.supabase.co"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Supabase public key</span>
+                    <textarea
+                      rows={4}
+                      value={app.supabaseAnonKey}
+                      onChange={(event) => updateApp("supabaseAnonKey", event.target.value)}
+                      placeholder="Publishable or anon key"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Workspace token</span>
+                    <input value={activeProject?.workspaceToken || ""} readOnly />
+                  </label>
+                  <label className="field">
+                    <span>Advanced plugin payload</span>
+                    <textarea rows={8} readOnly value={pluginSnippet} />
+                  </label>
                   <div className="field-action-row">
-                    <button className="secondary-button" type="button" onClick={() => copyText(pluginSnippet, "Advanced payload")}>Copy advanced payload</button>
+                    <button className="secondary-button" type="button" onClick={() => copyText(pluginSnippet, "Advanced payload")}>
+                      Copy advanced payload
+                    </button>
                   </div>
                 </details>
               </section>
 
               <section className="utility-card">
-                <div className="utility-card-head"><h2>Packs</h2><span>{selectedPacks.length} loaded</span></div>
+                <div className="utility-card-head">
+                  <h2>Packs</h2>
+                  <span>{selectedPacks.length} loaded</span>
+                </div>
                 <div className="pack-list">
                   {PACK_LIBRARY.map((pack) => {
                     const active = activeProject?.selectedPacks?.includes(pack.id);
                     return (
                       <label className={`pack-item ${active ? "pack-item-active" : ""}`} key={pack.id}>
                         <input checked={active} type="checkbox" onChange={() => togglePack(pack.id)} />
-                        <div><strong>{pack.name}</strong><span>{pack.description}</span></div>
+                        <div>
+                          <strong>{pack.name}</strong>
+                          <span>{pack.description}</span>
+                        </div>
                       </label>
                     );
                   })}
@@ -897,7 +1676,9 @@ function App() {
               <section className="utility-card">
                 <div className="utility-card-head">
                   <h2>Recent Jobs</h2>
-                  <button className="text-button" type="button" onClick={() => refreshWorkspace({ ensure: false, silent: false })}>Refresh</button>
+                  <button className="text-button" type="button" onClick={() => refreshWorkspace({ ensure: false, silent: false })}>
+                    Refresh
+                  </button>
                 </div>
                 {recentJobs.length ? (
                   <div className="job-list">
@@ -914,8 +1695,10 @@ function App() {
                         </div>
                         {Array.isArray(job.operations) && job.operations.length ? (
                           <div className="job-operation-list">
-                            {job.operations.slice(0, 3).map((op, i) => (
-                              <span className="job-operation-pill" key={`${job.id}-${i}`}>{summarizeOperation(op)}</span>
+                            {job.operations.slice(0, 3).map((operation, index) => (
+                              <span className="job-operation-pill" key={`${job.id}-${index}`}>
+                                {summarizeOperation(operation)}
+                              </span>
                             ))}
                           </div>
                         ) : null}
