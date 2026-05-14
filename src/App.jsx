@@ -208,8 +208,70 @@ function BrandLockup() {
 // ─── Home Page ─────────────────────────────────────────────────────────────────
 
 function HomePage({ onEnter }) {
+  const pageRef = useRef(null);
+
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page || typeof window === "undefined") return undefined;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const revealTargets = Array.from(page.querySelectorAll("[data-reveal]"));
+    let frame = 0;
+    let observer;
+
+    const updateScrollMotion = () => {
+      frame = 0;
+      const progress = Math.min(window.scrollY / 960, 1);
+      page.style.setProperty("--home-scroll-progress", progress.toFixed(3));
+    };
+
+    if (!reducedMotion.matches) {
+      updateScrollMotion();
+
+      const handleScroll = () => {
+        if (frame) return;
+        frame = window.requestAnimationFrame(updateScrollMotion);
+      };
+
+      window.addEventListener("scroll", handleScroll, { passive: true });
+
+      if ("IntersectionObserver" in window) {
+        observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (!entry.isIntersecting) return;
+              entry.target.classList.add("is-visible");
+              observer?.unobserve(entry.target);
+            });
+          },
+          {
+            threshold: 0.16,
+            rootMargin: "0px 0px -10% 0px",
+          },
+        );
+
+        revealTargets.forEach((target) => observer.observe(target));
+      } else {
+        revealTargets.forEach((target) => target.classList.add("is-visible"));
+      }
+
+      return () => {
+        window.removeEventListener("scroll", handleScroll);
+        if (frame) window.cancelAnimationFrame(frame);
+        observer?.disconnect();
+        page.style.removeProperty("--home-scroll-progress");
+      };
+    }
+
+    revealTargets.forEach((target) => target.classList.add("is-visible"));
+
+    return () => {
+      page.style.removeProperty("--home-scroll-progress");
+    };
+  }, []);
+
   return (
-    <div className="home-page">
+    <div className="home-page" ref={pageRef}>
       <nav className="home-nav">
         <div className="home-nav-inner">
           <div className="brand-lockup">
@@ -226,23 +288,24 @@ function HomePage({ onEnter }) {
       </nav>
 
       <section className="home-hero">
-        <div className="home-hero-eyebrow">AI-powered Roblox development</div>
-        <h1 className="home-hero-headline">
+        <div className="home-progress-line" aria-hidden="true" />
+        <div className="home-hero-eyebrow motion-reveal" data-reveal>AI-powered Roblox development</div>
+        <h1 className="home-hero-headline motion-reveal" data-reveal style={{ "--reveal-delay": "80ms" }}>
           Build Roblox games<br />
           <span className="home-hero-accent">from a single prompt.</span>
         </h1>
-        <p className="home-hero-sub">
+        <p className="home-hero-sub motion-reveal" data-reveal style={{ "--reveal-delay": "140ms" }}>
           Describe a mechanic, UI, or system. Zest writes the Lua and pushes it
           straight into Roblox Studio — no copy-paste, no friction.
         </p>
-        <div className="home-hero-actions">
+        <div className="home-hero-actions motion-reveal" data-reveal style={{ "--reveal-delay": "200ms" }}>
           <button className="primary-button home-hero-btn" type="button" onClick={onEnter}>
             Start building free
           </button>
           <span className="home-hero-note">Free models available · No account needed to try</span>
         </div>
 
-        <div className="home-terminal">
+        <div className="home-terminal motion-reveal" data-reveal style={{ "--reveal-delay": "260ms" }}>
           <div className="home-terminal-bar">
             <span className="home-terminal-dot" style={{ background: "#ff5f56" }} />
             <span className="home-terminal-dot" style={{ background: "#ffbd2e" }} />
@@ -268,10 +331,10 @@ function HomePage({ onEnter }) {
 
       <section className="home-features">
         <div className="home-section-inner">
-          <h2 className="home-section-title">Everything you need to ship faster</h2>
+          <h2 className="home-section-title motion-reveal" data-reveal>Everything you need to ship faster</h2>
           <div className="home-feature-grid">
-            {HOME_FEATURES.map((f) => (
-              <div className="home-feature-card" key={f.title}>
+            {HOME_FEATURES.map((f, index) => (
+              <div className="home-feature-card motion-reveal" data-reveal key={f.title} style={{ "--reveal-delay": `${80 + index * 70}ms` }}>
                 <div className="home-feature-icon">{f.icon}</div>
                 <h3>{f.title}</h3>
                 <p>{f.body}</p>
@@ -283,10 +346,10 @@ function HomePage({ onEnter }) {
 
       <section className="home-steps">
         <div className="home-section-inner">
-          <h2 className="home-section-title">How it works</h2>
+          <h2 className="home-section-title motion-reveal" data-reveal>How it works</h2>
           <div className="home-steps-grid">
-            {HOME_STEPS.map((s) => (
-              <div className="home-step" key={s.num}>
+            {HOME_STEPS.map((s, index) => (
+              <div className="home-step motion-reveal" data-reveal key={s.num} style={{ "--reveal-delay": `${80 + index * 90}ms` }}>
                 <div className="home-step-num">{s.num}</div>
                 <h3>{s.label}</h3>
                 <p>{s.body}</p>
@@ -297,7 +360,7 @@ function HomePage({ onEnter }) {
       </section>
 
       <section className="home-cta-band">
-        <div className="home-section-inner home-cta-inner">
+        <div className="home-section-inner home-cta-inner motion-reveal" data-reveal>
           <h2>Ready to build something?</h2>
           <p>Zest runs in your browser. No install, no account required to get started.</p>
           <button className="primary-button home-hero-btn" type="button" onClick={onEnter}>
