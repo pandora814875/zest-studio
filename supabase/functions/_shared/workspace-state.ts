@@ -8,6 +8,10 @@ type WorkspaceRow = {
   display_name: string;
   paired_plugin_name?: string | null;
   last_seen_at?: string | null;
+  studio_user_id?: number | null;
+  studio_username?: string | null;
+  studio_display_name?: string | null;
+  studio_authorized_at?: string | null;
 };
 
 async function getAuthProviderState(admin: SupabaseClient) {

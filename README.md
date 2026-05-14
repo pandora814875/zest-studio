@@ -9,7 +9,7 @@ Zest Studio is a Lemonade-style Roblox builder split into three connected layers
 ## What is in this version
 
 - A simpler Lemonade-style homepage plus a cleaner plugin-first studio dashboard.
-- Guest workspaces that work from a local workspace token before you wire full auth.
+- Homepage gating that waits for Roblox Studio to authorize the signed-in Studio account before opening the builder.
 - Short-code Studio pairing instead of a giant manual payload for the normal flow.
 - A zero-key built-in starter planner plus free-first Groq and optional OpenAI, Anthropic, Gemini, and Kimi.
 - Inventory-like code packs that add reusable system context to prompts.
@@ -163,17 +163,18 @@ Subscribe it to at least:
 4. Download the plugin from the Zest dashboard or copy [plugin/robolua-plugin.lua](./plugin/robolua-plugin.lua) into that folder.
 5. Restart Studio.
 6. Open the **Zest Studio** toolbar button.
-7. In the dashboard, copy the short pairing code.
-8. In Studio, paste that code into the plugin and click **Connect with code**.
-9. Click **Start sync**.
+7. From the homepage, copy the short pairing code.
+8. In Studio, paste that code into the plugin and click **Authorize and connect**.
+9. The plugin reads the Roblox account already signed into Studio and sends that authorization back to Zest.
+10. Once the homepage shows the Studio account as authorized, enter the workspace and click **Start sync**.
 
 ## How to use the new dashboard
 
 ### Homepage
 
 - Use it as the product-facing landing page.
-- The right hero area cycles through example system types.
-- The top CTA drops straight into the Studio workspace flow.
+- The top CTA now sends people into the Roblox Studio authorization flow first.
+- The app unlocks only after the plugin confirms the Roblox account already signed into Studio.
 
 ### Guest workspace layer
 

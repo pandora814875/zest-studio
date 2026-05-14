@@ -21,11 +21,28 @@ Deno.serve(async (request) => {
       typeof body.pluginName === "string" && body.pluginName.trim()
         ? body.pluginName.trim()
         : "Zest Studio Plugin";
+    const studioUser =
+      body.studioUser && typeof body.studioUser === "object"
+        ? {
+            userId:
+              typeof body.studioUser.userId === "number" && Number.isFinite(body.studioUser.userId)
+                ? body.studioUser.userId
+                : 0,
+            username:
+              typeof body.studioUser.username === "string" && body.studioUser.username.trim()
+                ? body.studioUser.username.trim()
+                : "",
+            displayName:
+              typeof body.studioUser.displayName === "string" && body.studioUser.displayName.trim()
+                ? body.studioUser.displayName.trim()
+                : "",
+          }
+        : null;
 
     if (action === "pair") {
       const pairCode = requireString(body.pairCode, "pairCode is required.");
       const workspace = await getWorkspaceByPairCode(admin, pairCode);
-      await touchWorkspace(admin, workspace.id, pluginName);
+      await touchWorkspace(admin, workspace.id, pluginName, studioUser);
 
       return new Response(
         JSON.stringify({
@@ -34,6 +51,7 @@ Deno.serve(async (request) => {
           workspaceName: workspace.display_name,
           pluginName,
           pollSeconds: 4,
+          studioUser: studioUser && studioUser.userId > 0 ? studioUser : null,
         }),
         {
           headers: {
@@ -46,7 +64,7 @@ Deno.serve(async (request) => {
 
     const workspaceToken = requireString(body.workspaceToken, "workspaceToken is required.");
     const workspace = await getWorkspaceByToken(admin, workspaceToken);
-    await touchWorkspace(admin, workspace.id, pluginName);
+    await touchWorkspace(admin, workspace.id, pluginName, studioUser);
 
     if (action === "claim") {
       const { data: job, error } = await admin.rpc("claim_next_job", {

@@ -7,7 +7,11 @@ create table if not exists public.workspaces (
   paired_plugin_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  last_seen_at timestamptz
+  last_seen_at timestamptz,
+  studio_user_id bigint,
+  studio_username text,
+  studio_display_name text,
+  studio_authorized_at timestamptz
 );
 
 create table if not exists public.profiles (
@@ -31,7 +35,11 @@ alter table public.workspaces
   add column if not exists stripe_price_id text,
   add column if not exists stripe_checkout_session_id text,
   add column if not exists billing_status text not null default 'free',
-  add column if not exists billing_interval text;
+  add column if not exists billing_interval text,
+  add column if not exists studio_user_id bigint,
+  add column if not exists studio_username text,
+  add column if not exists studio_display_name text,
+  add column if not exists studio_authorized_at timestamptz;
 
 do $$
 begin

@@ -1,6 +1,8 @@
 local HttpService = game:GetService("HttpService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
+local StudioService = game:GetService("StudioService")
+local Players = game:GetService("Players")
 
 local DEFAULT_SUPABASE_URL = "https://atycbrnthkgbrsxyabbs.supabase.co"
 local DEFAULT_SUPABASE_API_KEY = "sb_publishable_7pxGbv-NvSefp8w9RpZ8_g_vkQNkSOJ"
@@ -148,8 +150,11 @@ pairLabel.Parent = root
 local pairCodeBox = makeBox("Example: 1A2B-3C4D-5E6F-7A8B", "", 38)
 pairCodeBox.Parent = root
 
-local pairButton = makeButton("Connect with code", Color3.fromRGB(120, 210, 255))
+local pairButton = makeButton("Authorize and connect", Color3.fromRGB(120, 210, 255))
 pairButton.Parent = root
+
+local studioAccountLabel = makeLabel("Studio account: checking...", 12, Color3.fromRGB(184, 191, 179))
+studioAccountLabel.Parent = root
 
 local urlLabel = makeLabel("Advanced: Supabase URL", 12, Color3.fromRGB(184, 191, 179))
 urlLabel.Parent = root
@@ -223,6 +228,36 @@ local function sanitizePairCode(value)
 	return string.upper((value or ""):gsub("[^%w]", ""))
 end
 
+local function getStudioIdentity()
+	local userId = StudioService:GetUserId()
+	if not userId or userId <= 0 then
+		error("Sign in to Roblox Studio first so Zest can authorize your Roblox account.")
+	end
+
+	local ok, username = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+
+	if not ok or not username or username == "" then
+		error("Zest could not resolve the Roblox username for the Studio account.")
+	end
+
+	return {
+		userId = userId,
+		username = username,
+		displayName = username,
+	}
+end
+
+local function refreshStudioAccountLabel()
+	local ok, identity = pcall(getStudioIdentity)
+	if ok and identity then
+		studioAccountLabel.Text = ("Studio account: @%s (ID %d)"):format(identity.username, identity.userId)
+	else
+		studioAccountLabel.Text = "Studio account: sign in to Roblox Studio first."
+	end
+end
+
 local function ensureHttpConfigured()
 	if config.url == "" or config.apiKey == "" then
 		error("Supabase URL and public key are required.")
@@ -271,6 +306,7 @@ end
 
 local function pairWithDashboardCode()
 	saveConfig()
+	local studioIdentity = getStudioIdentity()
 
 	local pairCode = sanitizePairCode(pairCodeBox.Text)
 	if pairCode == "" then
@@ -284,6 +320,7 @@ local function pairWithDashboardCode()
 		action = "pair",
 		pairCode = pairCode,
 		pluginName = PLUGIN_NAME,
+		studioUser = studioIdentity,
 	}, false)
 
 	config.workspaceToken = trim(response.workspaceToken or "")
@@ -301,7 +338,8 @@ local function pairWithDashboardCode()
 	plugin:SetSetting(LEGACY_SETTINGS_KEYS.pollSeconds, config.pollSeconds)
 
 	setStatus("paired")
-	setLog(("Connected to %s. You can start sync now."):format(response.workspaceName or "your workspace"))
+	setLog(("Authorized as @%s and connected to %s. You can start sync now."):format(studioIdentity.username, response.workspaceName or "your workspace"))
+	refreshStudioAccountLabel()
 end
 
 local function splitPath(path)
@@ -604,6 +642,8 @@ saveButton.MouseButton1Click:Connect(function()
 		setLog(tostring(err))
 	end
 end)
+
+refreshStudioAccountLabel()
 
 pairButton.MouseButton1Click:Connect(function()
 	local ok, err = pcall(pairWithDashboardCode)

@@ -19,8 +19,18 @@ export type WorkspaceRow = {
   billing_status?: string | null;
   billing_interval?: string | null;
   last_seen_at?: string | null;
+  studio_user_id?: number | null;
+  studio_username?: string | null;
+  studio_display_name?: string | null;
+  studio_authorized_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type StudioIdentityInput = {
+  userId?: number | null;
+  username?: string | null;
+  displayName?: string | null;
 };
 
 type OwnedWorkspaceInput = {
@@ -507,13 +517,27 @@ export async function touchWorkspace(
   admin: ReturnType<typeof createAdminClient>,
   workspaceId: string,
   pluginName?: string,
+  studioIdentity?: StudioIdentityInput | null,
 ) {
-  const payload: Record<string, string> = {
+  const payload: Record<string, string | number | null> = {
     last_seen_at: new Date().toISOString(),
   };
 
   if (pluginName?.trim()) {
     payload.paired_plugin_name = pluginName.trim();
+  }
+
+  const studioUserId =
+    typeof studioIdentity?.userId === "number" && Number.isFinite(studioIdentity.userId) && studioIdentity.userId > 0
+      ? Math.trunc(studioIdentity.userId)
+      : 0;
+
+  if (studioUserId > 0) {
+    payload.studio_user_id = studioUserId;
+    payload.studio_username = studioIdentity?.username?.trim() || null;
+    payload.studio_display_name =
+      studioIdentity?.displayName?.trim() || studioIdentity?.username?.trim() || null;
+    payload.studio_authorized_at = new Date().toISOString();
   }
 
   const { error } = await admin.from("workspaces").update(payload).eq("id", workspaceId);
@@ -533,6 +557,10 @@ export function toProjectSummary(workspace: WorkspaceRow) {
     selectedPacks: Array.isArray(workspace.selected_packs) ? workspace.selected_packs : [],
     createdAt: workspace.created_at,
     billingStatus: workspace.billing_status || "free",
+    studioUserId: workspace.studio_user_id || null,
+    studioUsername: workspace.studio_username || "",
+    studioDisplayName: workspace.studio_display_name || "",
+    studioAuthorizedAt: workspace.studio_authorized_at || "",
   };
 }
 

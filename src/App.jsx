@@ -129,6 +129,7 @@ function defaultAppState() {
     pollingSeconds: 4,
     projects: [project],
     activeProjectId: project.id,
+    studioAuth: null,
   };
 }
 
@@ -145,6 +146,7 @@ function loadAppState() {
           pollingSeconds: Number(saved.pollingSeconds) || fallback.pollingSeconds,
           projects: saved.projects,
           activeProjectId: saved.activeProjectId || saved.projects[0]?.id || fallback.activeProjectId,
+          studioAuth: saved.studioAuth || fallback.studioAuth,
         };
       }
     } catch {}
@@ -153,7 +155,7 @@ function loadAppState() {
 }
 
 function emptyWorkspaceState() {
-  return { accessMode: "guest", project: null, workspace: null, pluginOnline: false, messages: [], jobs: [], modelCatalog: [] };
+  return { accessMode: "guest", project: null, workspace: null, pluginOnline: false, messages: [], jobs: [], modelCatalog: [], authProviders: {} };
 }
 
 function functionUrl(baseUrl, functionName) {
@@ -193,6 +195,21 @@ function summarizeOperation(operation) {
   return operation.description || operation.type || "Unknown operation";
 }
 
+function normalizeStudioAuth(value) {
+  if (!value || typeof value !== "object") return null;
+  const userId = Number(value.userId ?? value.studio_user_id ?? 0);
+  if (!Number.isFinite(userId) || userId <= 0) return null;
+  const username = String(value.username ?? value.studio_username ?? "").trim();
+  const displayName = String(value.displayName ?? value.studio_display_name ?? username).trim() || username;
+  const authorizedAt = String(value.authorizedAt ?? value.studio_authorized_at ?? "").trim();
+  return {
+    userId,
+    username,
+    displayName,
+    authorizedAt,
+  };
+}
+
 function BrandLockup() {
   return (
     <div className="brand-lockup">
@@ -207,8 +224,10 @@ function BrandLockup() {
 
 // ─── Home Page ─────────────────────────────────────────────────────────────────
 
-function HomePage({ onEnter }) {
+function HomePage({ onEnter, onDownloadPlugin, onCopyPairCode, onCopyPluginPath, workspaceName, pairCode, pluginOnline, studioAuth }) {
   const pageRef = useRef(null);
+  const authPanelRef = useRef(null);
+  const hasStudioAuth = Boolean(studioAuth?.userId);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -270,6 +289,15 @@ function HomePage({ onEnter }) {
     };
   }, []);
 
+  function handlePrimaryAction() {
+    if (hasStudioAuth) {
+      onEnter();
+      return;
+    }
+
+    authPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="home-page" ref={pageRef}>
       <nav className="home-nav">
@@ -281,7 +309,7 @@ function HomePage({ onEnter }) {
               <span>Roblox AI builder</span>
             </div>
           </div>
-          <button className="primary-button home-nav-cta" type="button" onClick={onEnter}>
+          <button className="primary-button home-nav-cta" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Open Workspace" : "Continue with Roblox Studio"} aria-label={hasStudioAuth ? "Open Workspace" : "Continue with Roblox Studio"}>
             Open Studio →
           </button>
         </div>
@@ -289,19 +317,22 @@ function HomePage({ onEnter }) {
 
       <section className="home-hero">
         <div className="home-progress-line" aria-hidden="true" />
-        <div className="home-hero-eyebrow motion-reveal" data-reveal>AI-powered Roblox development</div>
+        <div className="home-hero-eyebrow motion-reveal" data-reveal>Roblox Studio account authorization</div>
         <h1 className="home-hero-headline motion-reveal" data-reveal style={{ "--reveal-delay": "80ms" }}>
-          Build Roblox games<br />
-          <span className="home-hero-accent">from a single prompt.</span>
+          Start on the homepage,<br />
+          <span className="home-hero-accent">then unlock with Studio.</span>
         </h1>
         <p className="home-hero-sub motion-reveal" data-reveal style={{ "--reveal-delay": "140ms" }}>
           Describe a mechanic, UI, or system. Zest writes the Lua and pushes it
           straight into Roblox Studio — no copy-paste, no friction.
         </p>
         <div className="home-hero-actions motion-reveal" data-reveal style={{ "--reveal-delay": "200ms" }}>
-          <button className="primary-button home-hero-btn" type="button" onClick={onEnter}>
+          <button className="primary-button home-hero-btn" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Enter Zest Studio" : "Authorize with Studio"} aria-label={hasStudioAuth ? "Enter Zest Studio" : "Authorize with Studio"}>
             Start building free
           </button>
+          <span className="home-hero-note home-hero-note-dynamic">
+            {hasStudioAuth ? `Authorized as @${studioAuth?.username || studioAuth?.displayName || "creator"}` : "Plugin-first login · Roblox Studio account required"}
+          </span>
           <span className="home-hero-note">Free models available · No account needed to try</span>
         </div>
 
@@ -324,6 +355,71 @@ function HomePage({ onEnter }) {
             <div className="home-terminal-status">
               <span className="status-dot status-dot-live" />
               Studio connected · Job applied ✓
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-auth-band">
+        <div className="home-section-inner">
+          <div className="home-auth-card motion-reveal" data-reveal ref={authPanelRef}>
+            <div className="home-auth-copy">
+              <span className={`home-auth-status ${hasStudioAuth ? "home-auth-status-live" : pluginOnline ? "home-auth-status-waiting" : ""}`}>
+                {hasStudioAuth ? "Authorized" : pluginOnline ? "Studio connected" : "Waiting for Studio"}
+              </span>
+              <h2>{hasStudioAuth ? "Your Roblox Studio account is verified." : "Authorize from the homepage before you start building."}</h2>
+              <p>
+                {hasStudioAuth
+                  ? `Zest recognized ${studioAuth?.displayName || studioAuth?.username || "your Roblox account"} from Roblox Studio. You can enter the workspace now and start generating systems.`
+                  : "Download the plugin, open Roblox Studio, and use the pair code below. The plugin reads the account already signed into Studio and sends that authorization back to the site."}
+              </p>
+
+              {hasStudioAuth ? (
+                <div className="home-auth-user">
+                  <strong>@{studioAuth?.username || studioAuth?.displayName || "roblox-user"}</strong>
+                  <span>Roblox user ID {studioAuth?.userId}</span>
+                  <span>{studioAuth?.authorizedAt ? `Authorized ${formatDateTime(studioAuth.authorizedAt)}` : "Authorized from Studio"}</span>
+                </div>
+              ) : (
+                <div className="home-auth-action-row">
+                  <button className="primary-button home-auth-enter" type="button" onClick={onDownloadPlugin}>
+                    Download Plugin
+                  </button>
+                  <button className="secondary-button" type="button" onClick={() => onCopyPairCode(pairCode)}>
+                    Copy Pair Code
+                  </button>
+                </div>
+              )}
+
+              <div className="home-auth-action-row">
+                {hasStudioAuth ? (
+                  <button className="primary-button home-auth-enter" type="button" onClick={onEnter}>
+                    Continue to Workspace
+                  </button>
+                ) : null}
+                <button className="text-button" type="button" onClick={onCopyPluginPath}>
+                  Copy plugin folder path
+                </button>
+              </div>
+            </div>
+
+            <div className="home-auth-steps">
+              <div className="home-auth-step">
+                <span>01</span>
+                <strong>Install the plugin</strong>
+                <p>Download the Zest plugin, move it into your Roblox Plugins folder, then restart Studio.</p>
+              </div>
+              <div className="home-auth-step">
+                <span>02</span>
+                <strong>Paste this pair code</strong>
+                <div className="home-auth-pair">{pairCode || "PAIR-CODE"}</div>
+                <p>Open the plugin inside Studio and use this code to authorize the current workspace.</p>
+              </div>
+              <div className="home-auth-step">
+                <span>03</span>
+                <strong>Use your Studio account</strong>
+                <p>The plugin reads the Roblox account already signed into Studio and sends it back so Zest can unlock the app.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -361,9 +457,9 @@ function HomePage({ onEnter }) {
 
       <section className="home-cta-band">
         <div className="home-section-inner home-cta-inner motion-reveal" data-reveal>
-          <h2>Ready to build something?</h2>
-          <p>Zest runs in your browser. No install, no account required to get started.</p>
-          <button className="primary-button home-hero-btn" type="button" onClick={onEnter}>
+          <h2>{hasStudioAuth ? "You are cleared to build." : "Authorize Studio, then enter the builder."}</h2>
+          <p>{hasStudioAuth ? "Your Roblox Studio account is recognized. Jump into the workspace and start queuing systems." : "The homepage stays locked until Roblox Studio confirms the signed-in account through the plugin."}</p>
+          <button className="primary-button home-hero-btn" type="button" onClick={handlePrimaryAction} data-label={hasStudioAuth ? "Open Zest Studio" : "Finish Studio Authorization"} aria-label={hasStudioAuth ? "Open Zest Studio" : "Finish Studio Authorization"}>
             Open Zest Studio
           </button>
         </div>
@@ -400,6 +496,11 @@ function App() {
   const orderedMessages = useMemo(() => [...(workspaceState.messages || [])].reverse(), [workspaceState.messages]);
   const recentJobs = workspaceState.jobs || [];
   const pluginPairCode = useMemo(() => formatPairCode(pairCodeFromWorkspaceToken(activeProject?.workspaceToken || "")), [activeProject?.workspaceToken]);
+  const studioAuth = useMemo(
+    () => normalizeStudioAuth(workspaceState.workspace) || normalizeStudioAuth(app.studioAuth),
+    [workspaceState.workspace, app.studioAuth],
+  );
+  const hasStudioAuth = Boolean(studioAuth?.userId);
   const pluginSnippet = useMemo(
     () => JSON.stringify({ supabaseUrl: app.supabaseUrl.trim(), publicKey: app.supabaseAnonKey.trim(), workspaceToken: activeProject?.workspaceToken || "", projectName: activeProject?.name || "", pairCode: pluginPairCode }, null, 2),
     [activeProject?.name, activeProject?.workspaceToken, app.supabaseAnonKey, app.supabaseUrl, pluginPairCode],
@@ -410,6 +511,12 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(app));
   }, [app]);
+
+  useEffect(() => {
+    if (view === "workspace" && !hasStudioAuth) {
+      setView("home");
+    }
+  }, [hasStudioAuth, view]);
 
   function updateApp(key, value) {
     setApp((c) => ({ ...c, [key]: value }));
@@ -430,8 +537,29 @@ function App() {
         p.workspaceToken === projectSummary.workspaceToken
           ? { ...p, name: projectSummary.name || p.name, description: projectSummary.description ?? p.description, modelKey: projectSummary.modelKey || p.modelKey, selectedPacks: Array.isArray(projectSummary.selectedPacks) ? projectSummary.selectedPacks : p.selectedPacks }
           : p,
-      ),
+        ),
     }));
+  }
+
+  function syncStudioAuthFromServer(workspace) {
+    const nextStudioAuth = normalizeStudioAuth(workspace);
+    if (!nextStudioAuth) return;
+    setApp((c) => {
+      const current = normalizeStudioAuth(c.studioAuth);
+      if (
+        current?.userId === nextStudioAuth.userId &&
+        current?.username === nextStudioAuth.username &&
+        current?.displayName === nextStudioAuth.displayName &&
+        current?.authorizedAt === nextStudioAuth.authorizedAt
+      ) {
+        return c;
+      }
+
+      return {
+        ...c,
+        studioAuth: nextStudioAuth,
+      };
+    });
   }
 
   async function copyText(value, label) {
@@ -474,6 +602,7 @@ function App() {
       });
       setWorkspaceState(payload);
       syncProjectFromServer(payload.project);
+      syncStudioAuthFromServer(payload.workspace);
       setLastSyncedAt(new Date().toISOString());
       if (!silent) setError("");
     } catch (nextError) {
@@ -499,6 +628,7 @@ function App() {
     event.preventDefault();
     if (!prompt.trim()) { setError("Write a prompt first."); return; }
     if (!activeProject?.workspaceToken) { setError("Create a workspace first."); return; }
+    if (!hasStudioAuth) { setError("Authorize Roblox Studio from the homepage first."); return; }
     setIsSubmitting(true);
     setError("");
     try {
@@ -512,6 +642,7 @@ function App() {
       });
       setWorkspaceState(payload.workspace);
       syncProjectFromServer(payload.workspace?.project);
+      syncStudioAuthFromServer(payload.workspace?.workspace);
       setPrompt("");
       setLastSyncedAt(new Date().toISOString());
     } catch (nextError) {
@@ -555,7 +686,18 @@ function App() {
   }
 
   if (view === "home") {
-    return <HomePage onEnter={() => setView("workspace")} />;
+    return (
+      <HomePage
+        onEnter={() => setView("workspace")}
+        onDownloadPlugin={downloadPluginFile}
+        onCopyPairCode={(value) => copyText(value, "Pair code")}
+        onCopyPluginPath={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
+        workspaceName={activeProject?.name || "Starter Workspace"}
+        pairCode={pluginPairCode || "NO-CODE-YET"}
+        pluginOnline={workspaceState.pluginOnline}
+        studioAuth={studioAuth}
+      />
+    );
   }
 
   return (
@@ -612,6 +754,12 @@ function App() {
                 <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
                 <span>{workspaceState.pluginOnline ? "Studio connected" : "Studio waiting"}</span>
               </div>
+              {studioAuth ? (
+                <div className="studio-identity-card">
+                  <strong>@{studioAuth.username || studioAuth.displayName || "creator"}</strong>
+                  <span>Authorized with Roblox Studio</span>
+                </div>
+              ) : null}
               <button className="secondary-button" type="button" onClick={downloadPluginFile}>Download Plugin</button>
               <button className="text-button" type="button" onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}>Copy plugin path hint</button>
             </div>
@@ -695,7 +843,7 @@ function App() {
                     </div>
                     <div className="composer-send-group">
                       <span className="composer-hint">Ctrl+Enter to send</span>
-                      <button className="primary-button" type="submit" disabled={isSubmitting}>
+                      <button className="primary-button" type="submit" disabled={isSubmitting || !hasStudioAuth}>
                         {isSubmitting ? "Generating…" : "Send"}
                       </button>
                     </div>
