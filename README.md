@@ -43,7 +43,7 @@ To match the easier Lemonade-style login flow, add Roblox as a custom OIDC provi
 4. Use the identifier `custom:roblox`.
 5. Set the issuer to `https://apis.roblox.com/oauth/`.
 6. Copy the callback URL shown by Supabase and paste it into your Roblox OAuth app.
-7. Use scopes like `openid profile email verification`.
+7. Use scopes `openid profile`.
 8. If you want Roblox login to work even when the account does not share an email, enable Supabase's email-optional setting for the provider.
 
 This repo still includes the Roblox OAuth setup helper for when you want account verification later:

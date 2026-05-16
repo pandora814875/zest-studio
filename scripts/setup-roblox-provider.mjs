@@ -33,7 +33,7 @@ const providerPayload = {
   client_id: clientId,
   client_secret: clientSecret,
   issuer: "https://apis.roblox.com/oauth/",
-  scopes: ["openid", "profile", "email", "verification"],
+  scopes: ["openid", "profile"],
   pkce_enabled: true,
   email_optional: true,
   enabled: true,
