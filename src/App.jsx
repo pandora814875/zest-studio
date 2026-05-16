@@ -140,6 +140,25 @@ const PROMPT_SUGGESTIONS = [
   "Create daily quests with progress bars, claims, and simple save handling.",
 ];
 
+const BUILD_STAGE_SHORTCUTS = [
+  {
+    label: "Inventory UI",
+    prompt: PROMPT_SUGGESTIONS[0],
+  },
+  {
+    label: "Round Survival",
+    prompt: PROMPT_SUGGESTIONS[1],
+  },
+  {
+    label: "Shop System",
+    prompt: PROMPT_SUGGESTIONS[2],
+  },
+  {
+    label: "Daily Quests",
+    prompt: PROMPT_SUGGESTIONS[3],
+  },
+];
+
 const HOME_FEATURES = [
   {
     icon: "AI",
@@ -181,18 +200,12 @@ const HOME_STEPS = [
   },
 ];
 
-const WORKSPACE_PANES = [
-  {
-    id: "build",
-    label: "Build",
-    title: "Build",
-    subtitle: "Chat with Zest, queue a feature, and send it to Roblox Studio.",
-  },
+const WORKSPACE_DRAWERS = [
   {
     id: "library",
-    label: "Library",
+    label: "Systems",
     title: "System Library",
-    subtitle: "Open focused system groups instead of hunting through every pack at once.",
+    subtitle: "Open system families only when you need them, then drop back into the main build canvas.",
   },
   {
     id: "studio",
@@ -204,7 +217,36 @@ const WORKSPACE_PANES = [
     id: "jobs",
     label: "Jobs",
     title: "Recent Jobs",
-    subtitle: "Review generated work, what was applied, and what should be retried next.",
+    subtitle: "Review generated work without turning the main workspace into a full dashboard.",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    title: "Workspace Settings",
+    subtitle: "Keep project details and advanced connection options tucked away until you need them.",
+  },
+];
+
+const BUILD_STAGE_PREVIEWS = [
+  {
+    id: "inventory",
+    eyebrow: "Inventory UI",
+    title: "rarity borders",
+  },
+  {
+    id: "combat",
+    eyebrow: "Combat Loop",
+    title: "wave pacing",
+  },
+  {
+    id: "economy",
+    eyebrow: "Economy Core",
+    title: "shop bundles",
+  },
+  {
+    id: "rng",
+    eyebrow: "RNG Cards",
+    title: "reveal flow",
   },
 ];
 
@@ -1035,8 +1077,8 @@ function App() {
   const isRobloxProviderReady = Boolean(robloxProvider?.configured && robloxProvider?.enabled);
   const onboardingState = authUser?.id ? app.onboardingByUser?.[authUser.id] || null : null;
   const hasCompletedOnboarding = Boolean(onboardingState?.path);
-  const activePane =
-    WORKSPACE_PANES.find((pane) => pane.id === workspacePane) || WORKSPACE_PANES[0];
+  const activeDrawer =
+    WORKSPACE_DRAWERS.find((pane) => pane.id === workspacePane) || null;
   const activeCollection =
     PACK_COLLECTIONS.find((collection) => collection.id === selectedCollectionId) ||
     PACK_COLLECTIONS[0];
@@ -1400,6 +1442,10 @@ function App() {
     updateActiveProject({ selectedPacks: next });
   }
 
+  function closeWorkspacePane() {
+    setWorkspacePane("build");
+  }
+
   async function startRobloxSignIn() {
     if (!supabase) {
       setAuthError("Supabase settings are missing on this deployment.");
@@ -1451,6 +1497,354 @@ function App() {
     setView("workspace");
   }
 
+  function renderComposer({ centered = false } = {}) {
+    return (
+      <div className={`composer-panel ${centered ? "composer-panel-centered" : "composer-panel-docked"}`}>
+        {error ? <div className="notice notice-error">{error}</div> : null}
+        {copyFeedback ? <div className="notice notice-success">{copyFeedback}</div> : null}
+
+        <div className={`workspace-action-row ${centered ? "workspace-action-row-centered" : ""}`}>
+          {WORKSPACE_DRAWERS.map((pane) => (
+            <button
+              className={`workspace-action-chip ${workspacePane === pane.id ? "workspace-action-chip-active" : ""}`}
+              key={pane.id}
+              type="button"
+              onClick={() => setWorkspacePane(pane.id)}
+            >
+              {pane.label}
+            </button>
+          ))}
+        </div>
+
+        <form className="composer-form" onSubmit={submitPrompt}>
+          <div className={`composer-shell ${centered ? "composer-shell-centered" : ""}`}>
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={handleTextareaKeyDown}
+              placeholder="Describe a mechanic, UI, or system you want Zest to build in Roblox Studio..."
+              rows={centered ? 4 : 3}
+            />
+            <div className="composer-footer composer-footer-clean">
+              <div className="composer-meta">
+                <span className="composer-pill">{selectedModel?.label || "No model"}</span>
+                <span className="composer-pill">{isAuthenticated ? "roblox" : workspaceState.accessMode || "guest"}</span>
+                <span className="composer-pill">{workspaceState.pluginOnline ? "Studio ready" : "Studio waiting"}</span>
+              </div>
+              <div className="composer-send-group">
+                <span className="composer-hint">Ctrl+Enter to send</span>
+                <button className="primary-button composer-send-button" type="submit" disabled={isSubmitting || !isAuthenticated}>
+                  {isSubmitting ? "Generating..." : "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  function renderWorkspaceDrawer() {
+    if (workspacePane === "build" || !activeDrawer) {
+      return null;
+    }
+
+    return (
+      <>
+        <button
+          aria-label="Close panel"
+          className="workspace-drawer-scrim"
+          type="button"
+          onClick={closeWorkspacePane}
+        />
+        <aside className="workspace-drawer">
+          <div className="workspace-drawer-head">
+            <div>
+              <span className="pane-eyebrow">{activeDrawer.label}</span>
+              <h2>{activeDrawer.title}</h2>
+              <p>{activeDrawer.subtitle}</p>
+            </div>
+            <button className="drawer-close-button" type="button" onClick={closeWorkspacePane}>
+              x
+            </button>
+          </div>
+
+          <div className="workspace-drawer-body">
+            {workspacePane === "library" ? (
+              <div className="drawer-stack">
+                <div className="drawer-chip-row">
+                  {PACK_COLLECTIONS.map((collection) => {
+                    const loaded = collection.packIds.filter((packId) =>
+                      activeProject?.selectedPacks?.includes(packId),
+                    ).length;
+                    return (
+                      <button
+                        className={`drawer-chip ${collection.id === activeCollection.id ? "drawer-chip-active" : ""}`}
+                        key={collection.id}
+                        type="button"
+                        onClick={() => setSelectedCollectionId(collection.id)}
+                      >
+                        {collection.name}
+                        <span>{loaded}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <section className="drawer-card">
+                  <div className="drawer-card-head">
+                    <div>
+                      <span className="sidebar-label">Open collection</span>
+                      <h3>{activeCollection.name}</h3>
+                    </div>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => toggleCollection(activeCollection.id)}
+                    >
+                      {activeCollection.packIds.every((packId) => activeProject?.selectedPacks?.includes(packId))
+                        ? "Unload"
+                        : "Load"}
+                    </button>
+                  </div>
+                  <p className="drawer-copy">{activeCollection.blurb}</p>
+                </section>
+
+                <div className="drawer-pack-list">
+                  {activeCollectionPacks.map((pack) => {
+                    const active = activeProject?.selectedPacks?.includes(pack.id);
+                    return (
+                      <label className={`pack-item ${active ? "pack-item-active" : ""}`} key={pack.id}>
+                        <input checked={active} type="checkbox" onChange={() => togglePack(pack.id)} />
+                        <div>
+                          <strong>{pack.name}</strong>
+                          <span>{pack.description}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <section className="drawer-card">
+                  <div className="drawer-card-head">
+                    <div>
+                      <span className="sidebar-label">Starter prompts</span>
+                      <h3>Jump back into Build with one click.</h3>
+                    </div>
+                  </div>
+                  <div className="drawer-suggestion-list">
+                    {activeCollection.promptIdeas.map((idea) => (
+                      <button
+                        className="suggestion-card suggestion-card-compact"
+                        key={idea}
+                        type="button"
+                        onClick={() => {
+                          setPrompt(idea);
+                          closeWorkspacePane();
+                          window.setTimeout(() => textareaRef.current?.focus(), 0);
+                        }}
+                      >
+                        {idea}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : workspacePane === "studio" ? (
+              <div className="drawer-stack">
+                <section className="drawer-card">
+                  <span className="sidebar-label">Step 01</span>
+                  <h3>Install the plugin</h3>
+                  <p className="drawer-copy">Download the plugin, move it into the Roblox plugins folder, then restart Studio once.</p>
+                  <div className="studio-action-row">
+                    <button className="primary-button" type="button" onClick={downloadPluginFile}>
+                      Download Plugin
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
+                    >
+                      Copy plugin path
+                    </button>
+                  </div>
+                </section>
+
+                <section className="drawer-card">
+                  <span className="sidebar-label">Step 02</span>
+                  <h3>Pair this workspace</h3>
+                  <div className="pair-code">{pluginPairCode || "NO-CODE-YET"}</div>
+                  <p className="drawer-copy">Paste this code into the plugin so Studio knows which workspace should receive jobs.</p>
+                  <button className="secondary-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>
+                    Copy pair code
+                  </button>
+                </section>
+
+                <section className="drawer-card">
+                  <span className="sidebar-label">Step 03</span>
+                  <h3>Check connection</h3>
+                  <div className="status-line">
+                    <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
+                    <span>{workspaceState.pluginOnline ? "Studio connected" : "Studio waiting"}</span>
+                  </div>
+                  <p className="drawer-copy">
+                    {workspaceState.pluginOnline
+                      ? "This workspace is live and Roblox Studio is already polling for jobs."
+                      : "Once the plugin is connected, Studio will start claiming jobs and reporting results back here."}
+                  </p>
+                  {studioAuth ? (
+                    <div className="studio-identity-card">
+                      <strong>@{studioAuth.username || studioAuth.displayName || "creator"}</strong>
+                      <span>Paired from Roblox Studio</span>
+                    </div>
+                  ) : null}
+                </section>
+              </div>
+            ) : workspacePane === "jobs" ? (
+              recentJobs.length ? (
+                <div className="job-list job-list-expanded">
+                  {recentJobs.map((job) => (
+                    <div className="job-item" key={job.id}>
+                      <div className="job-item-head">
+                        <strong>{job.title}</strong>
+                        <span className={`job-status job-status-${job.status}`}>{formatStatus(job.status)}</span>
+                      </div>
+                      <p>{job.summary || "No summary returned."}</p>
+                      <div className="job-item-meta">
+                        <span>{job.model_key || "Unknown model"}</span>
+                        <span>{formatDateTime(job.created_at)}</span>
+                      </div>
+                      {Array.isArray(job.operations) && job.operations.length ? (
+                        <div className="job-operation-list">
+                          {job.operations.map((operation, index) => (
+                            <span className="job-operation-pill" key={`${job.id}-${index}`}>
+                              {summarizeOperation(operation)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state-small">No jobs yet.</div>
+              )
+            ) : (
+              <div className="drawer-stack">
+                <section className="drawer-card">
+                  <div className="drawer-card-head">
+                    <div>
+                      <span className="sidebar-label">Workspace basics</span>
+                      <h3>Keep the main screen clean.</h3>
+                    </div>
+                    <span>{lastSyncedAt ? `Synced ${formatDateTime(lastSyncedAt)}` : "Not synced"}</span>
+                  </div>
+                  <label className="field">
+                    <span>Name</span>
+                    <input
+                      value={activeProject?.name || ""}
+                      onChange={(event) => updateActiveProject({ name: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Description</span>
+                    <textarea
+                      rows={3}
+                      value={activeProject?.description || ""}
+                      onChange={(event) => updateActiveProject({ description: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Polling seconds</span>
+                    <input
+                      type="number"
+                      min="2"
+                      max="30"
+                      value={app.pollingSeconds}
+                      onChange={(event) => updateApp("pollingSeconds", event.target.value)}
+                    />
+                  </label>
+                </section>
+
+                <section className="drawer-card">
+                  <div className="drawer-card-head">
+                    <div>
+                      <span className="sidebar-label">Loaded systems</span>
+                      <h3>{selectedPacks.length ? `${selectedPacks.length} systems in this workspace` : "No systems loaded yet"}</h3>
+                    </div>
+                    <button className="secondary-button" type="button" onClick={() => setWorkspacePane("library")}>
+                      Open Systems
+                    </button>
+                  </div>
+                  <div className="selected-pack-stack">
+                    {selectedPacks.length ? (
+                      selectedPacks.map((pack) => (
+                        <button
+                          className="selected-pack-chip"
+                          key={pack.id}
+                          type="button"
+                          onClick={() => {
+                            const matchingCollection = PACK_COLLECTIONS.find((collection) =>
+                              collection.packIds.includes(pack.id),
+                            );
+                            if (matchingCollection) {
+                              setSelectedCollectionId(matchingCollection.id);
+                              setWorkspacePane("library");
+                            }
+                          }}
+                        >
+                          <strong>{pack.name}</strong>
+                          <span>{pack.description}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="empty-state-small">Open Systems to load packs like Inventory UI, RNG Cards, or Save Layer.</div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="drawer-card">
+                  <span className="sidebar-label">Advanced</span>
+                  <label className="field">
+                    <span>Supabase project URL</span>
+                    <input
+                      value={app.supabaseUrl}
+                      onChange={(event) => updateApp("supabaseUrl", event.target.value)}
+                      placeholder="https://your-project.supabase.co"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Supabase public key</span>
+                    <textarea
+                      rows={4}
+                      value={app.supabaseAnonKey}
+                      onChange={(event) => updateApp("supabaseAnonKey", event.target.value)}
+                      placeholder="Publishable or anon key"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Workspace token</span>
+                    <input value={activeProject?.workspaceToken || ""} readOnly />
+                  </label>
+                  <label className="field">
+                    <span>Advanced plugin payload</span>
+                    <textarea rows={8} readOnly value={pluginSnippet} />
+                  </label>
+                  <div className="field-action-row">
+                    <button className="secondary-button" type="button" onClick={() => copyText(pluginSnippet, "Advanced payload")}>
+                      Copy advanced payload
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
+        </aside>
+      </>
+    );
+  }
+
   if (view === "home") {
     return (
       <>
@@ -1492,6 +1886,237 @@ function App() {
       </>
     );
   }
+
+  return (
+    <WorkspaceErrorBoundary>
+      <div className="workspace-app workspace-app-clean">
+        <aside className="sidebar sidebar-clean">
+          <div className="sidebar-top">
+            <button className="home-back-btn" type="button" onClick={() => setView("home")}>
+              Back Home
+            </button>
+            <BrandLockup />
+            {isAuthenticated ? (
+              <div className="studio-identity-card studio-identity-card-subtle">
+                <strong>@{authProfile?.username || authProfile?.displayName || "creator"}</strong>
+                <span>Signed in with Roblox</span>
+              </div>
+            ) : null}
+            <button className="primary-button new-workspace-button" type="button" onClick={addProject}>
+              + New Workspace
+            </button>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-label">Projects</div>
+            <div className="workspace-list">
+              {app.projects.map((project) => {
+                const active = project.id === activeProject?.id;
+                return (
+                  <button
+                    className={`workspace-item ${active ? "workspace-item-active" : ""}`}
+                    key={project.id}
+                    type="button"
+                    onClick={() => {
+                      setApp((current) => ({ ...current, activeProjectId: project.id }));
+                      closeWorkspacePane();
+                    }}
+                  >
+                    <div className="workspace-item-copy">
+                      <strong>{project.name}</strong>
+                      <span>{project.description}</span>
+                    </div>
+                    {app.projects.length > 1 ? (
+                      <span
+                        className="workspace-item-remove"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeProject(project.id);
+                        }}
+                      >
+                        x
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sidebar-section sidebar-bottom">
+            <div className="sidebar-label">Studio</div>
+            <div className="sidebar-card sidebar-status-card">
+              <div className="status-line">
+                <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
+                <span>{workspaceState.pluginOnline ? "Studio connected" : "Studio waiting"}</span>
+              </div>
+              {studioAuth ? (
+                <div className="studio-identity-card studio-identity-card-subtle">
+                  <strong>@{studioAuth.username || studioAuth.displayName || "creator"}</strong>
+                  <span>Paired from Roblox Studio</span>
+                </div>
+              ) : null}
+              <p className="sidebar-status-copy">
+                {workspaceState.pluginOnline
+                  ? "Studio is live and already polling for work from this workspace."
+                  : latestJob
+                    ? `${formatStatus(latestJob.status)} · ${latestJob.title}`
+                    : "Leave setup tucked away until you need it, then open Studio from the build controls."}
+              </p>
+              <div className="sidebar-inline-actions">
+                <button className="secondary-button sidebar-inline-button" type="button" onClick={() => setWorkspacePane("studio")}>
+                  Open Studio
+                </button>
+                <button className="secondary-button sidebar-inline-button" type="button" onClick={downloadPluginFile}>
+                  Download Plugin
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section className="main-shell main-shell-clean">
+          <header className="main-header main-header-clean">
+            <div className="main-header-copy">
+              <span className="pane-eyebrow">Workspace</span>
+              <h1>{activeProject?.name || "Workspace"}</h1>
+              <p>{activeProject?.description || "Describe a mechanic, UI, or system and send it to Roblox Studio from one clean build screen."}</p>
+            </div>
+            <div className="main-header-actions">
+              <label className="model-select-shell">
+                <span>Model</span>
+                <select
+                  value={activeProject?.modelKey || ""}
+                  onChange={(event) => updateActiveProject({ modelKey: event.target.value })}
+                >
+                  {availableModels.map((model) => (
+                    <option disabled={!model.enabled} key={model.key} value={model.key}>
+                      {model.label} · {model.providerLabel}
+                      {!model.enabled ? " (setup needed)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="secondary-button" type="button" onClick={saveWorkspace} disabled={isRefreshing}>
+                {isRefreshing ? "Syncing..." : "Save"}
+              </button>
+              {isAuthenticated ? (
+                <button className="secondary-button" type="button" onClick={signOutRoblox}>
+                  Sign out
+                </button>
+              ) : null}
+            </div>
+          </header>
+
+          <div className="content-grid content-grid-clean">
+            <section className="chat-panel chat-panel-clean">
+              {orderedMessages.length ? (
+                <>
+                  <div className="chat-scroll chat-scroll-thread">
+                    <div className="thread-shell">
+                      <div className="thread-topbar">
+                        <span className="chat-empty-logo thread-logo">{PRODUCT_NAME}</span>
+                        <div className="thread-topbar-pills">
+                          {selectedPacks.slice(0, 3).map((pack) => (
+                            <button
+                              className="thread-pack-pill"
+                              key={pack.id}
+                              type="button"
+                              onClick={() => {
+                                const matchingCollection = PACK_COLLECTIONS.find((collection) =>
+                                  collection.packIds.includes(pack.id),
+                                );
+                                if (matchingCollection) {
+                                  setSelectedCollectionId(matchingCollection.id);
+                                  setWorkspacePane("library");
+                                }
+                              }}
+                            >
+                              {pack.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="message-list">
+                        {orderedMessages.map((message) => (
+                          <div
+                            className={`message-row ${
+                              message.role === "user" ? "message-row-user" : "message-row-assistant"
+                            }`}
+                            key={message.id}
+                          >
+                            <div className={`message-bubble message-bubble-${message.role}`}>
+                              <div className="message-role">{message.role === "user" ? "You" : PRODUCT_NAME}</div>
+                              <div className="message-content">{message.content}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  {renderComposer()}
+                </>
+              ) : (
+                <div className="chat-scroll chat-scroll-stage">
+                  <div className="build-stage">
+                    <div className="build-stage-canvas">
+                      {BUILD_STAGE_PREVIEWS.map((preview, index) => (
+                        <div className={`build-preview-card build-preview-card-${index + 1}`} key={preview.id}>
+                          <span>{preview.eyebrow}</span>
+                          <strong>{preview.title}</strong>
+                        </div>
+                      ))}
+
+                      <div className="build-stage-copy">
+                        <div className="chat-empty-logo">{PRODUCT_NAME}</div>
+                        <h2>Describe the next Roblox system.</h2>
+                        <p>
+                          Keep the canvas clean. Open Systems, Studio, Jobs, or Settings only when you need them,
+                          then come right back here to build.
+                        </p>
+                        <div className="build-stage-loaded">
+                          {(loadedCollections.length ? loadedCollections : PACK_COLLECTIONS.slice(0, 2)).map((collection) => (
+                            <button
+                              className="build-stage-chip"
+                              key={collection.id}
+                              type="button"
+                              onClick={() => openCollection(collection.id)}
+                            >
+                              {collection.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="build-stage-suggestions">
+                          {BUILD_STAGE_SHORTCUTS.map((shortcut) => (
+                            <button
+                              className="suggestion-card suggestion-card-pill"
+                              key={shortcut.label}
+                              type="button"
+                              onClick={() => {
+                                setPrompt(shortcut.prompt);
+                                window.setTimeout(() => textareaRef.current?.focus(), 0);
+                              }}
+                            >
+                              {shortcut.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {renderComposer({ centered: true })}
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+
+          {renderWorkspaceDrawer()}
+        </section>
+      </div>
+    </WorkspaceErrorBoundary>
+  );
 
   return (
     <WorkspaceErrorBoundary>
@@ -1549,25 +2174,8 @@ function App() {
             </div>
           </div>
 
-          <div className="sidebar-section">
-            <div className="sidebar-label">Open</div>
-            <div className="workspace-nav">
-              {WORKSPACE_PANES.map((pane) => (
-                <button
-                  className={`workspace-nav-item ${workspacePane === pane.id ? "workspace-nav-item-active" : ""}`}
-                  key={pane.id}
-                  type="button"
-                  onClick={() => setWorkspacePane(pane.id)}
-                >
-                  <strong>{pane.label}</strong>
-                  <span>{pane.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="sidebar-section sidebar-bottom">
-            <div className="sidebar-label">Status</div>
+            <div className="sidebar-label">Studio</div>
             <div className="sidebar-card sidebar-status-card">
               <div className="status-line">
                 <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
