@@ -181,6 +181,66 @@ const HOME_STEPS = [
   },
 ];
 
+const WORKSPACE_PANES = [
+  {
+    id: "build",
+    label: "Build",
+    title: "Build",
+    subtitle: "Chat with Zest, queue a feature, and send it to Roblox Studio.",
+  },
+  {
+    id: "library",
+    label: "Library",
+    title: "System Library",
+    subtitle: "Open focused system groups instead of hunting through every pack at once.",
+  },
+  {
+    id: "studio",
+    label: "Studio",
+    title: "Studio Setup",
+    subtitle: "Install the plugin, connect Roblox Studio, and keep this workspace in sync.",
+  },
+  {
+    id: "jobs",
+    label: "Jobs",
+    title: "Recent Jobs",
+    subtitle: "Review generated work, what was applied, and what should be retried next.",
+  },
+];
+
+const PACK_COLLECTIONS = [
+  {
+    id: "inventory-suite",
+    name: "Inventory Systems",
+    blurb: "Menus, cards, rarity, shops, and the reward loop around them.",
+    packIds: ["inventory-ui", "rng-cards", "economy-core", "datastore-safe"],
+    promptIdeas: [
+      "Create a card inventory with rarity borders, inspect states, and equip slots.",
+      "Build an RNG reveal flow with pity, duplicate conversion, and collection progress.",
+    ],
+  },
+  {
+    id: "combat-suite",
+    name: "Combat Systems",
+    blurb: "Movement pressure, enemy behavior, hit confirmation, and survival pacing.",
+    packIds: ["combat-kit", "monster-ai", "round-director"],
+    promptIdeas: [
+      "Make a wave combat loop with enemy spawns, cooldowns, and hit feedback.",
+      "Create a boss arena with aggro checks, attack telegraphs, and victory rewards.",
+    ],
+  },
+  {
+    id: "world-suite",
+    name: "World & Progression",
+    blurb: "Plots, rounds, ownership, and the save structure behind long-term progress.",
+    packIds: ["housing-plots", "round-director", "datastore-safe"],
+    promptIdeas: [
+      "Build a claimable plot system with permissions, placement limits, and save support.",
+      "Create a survival loop with lobby, round states, checkpoints, and persistent rewards.",
+    ],
+  },
+];
+
 const ONBOARDING_OPTIONS = [
   {
     id: "builder",
@@ -934,6 +994,8 @@ function App() {
   const [authPending, setAuthPending] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authSession, setAuthSession] = useState(null);
+  const [workspacePane, setWorkspacePane] = useState("build");
+  const [selectedCollectionId, setSelectedCollectionId] = useState(PACK_COLLECTIONS[0].id);
   const textareaRef = useRef(null);
 
   const activeProject = app.projects.find((project) => project.id === app.activeProjectId) || app.projects[0];
@@ -957,6 +1019,7 @@ function App() {
     [workspaceState.messages],
   );
   const recentJobs = workspaceState.jobs || [];
+  const latestJob = recentJobs[0] || null;
   const pluginPairCode = useMemo(
     () => formatPairCode(pairCodeFromWorkspaceToken(activeProject?.workspaceToken || "")),
     [activeProject?.workspaceToken],
@@ -972,6 +1035,25 @@ function App() {
   const isRobloxProviderReady = Boolean(robloxProvider?.configured && robloxProvider?.enabled);
   const onboardingState = authUser?.id ? app.onboardingByUser?.[authUser.id] || null : null;
   const hasCompletedOnboarding = Boolean(onboardingState?.path);
+  const activePane =
+    WORKSPACE_PANES.find((pane) => pane.id === workspacePane) || WORKSPACE_PANES[0];
+  const activeCollection =
+    PACK_COLLECTIONS.find((collection) => collection.id === selectedCollectionId) ||
+    PACK_COLLECTIONS[0];
+  const activeCollectionPacks = useMemo(
+    () =>
+      activeCollection.packIds
+        .map((packId) => PACK_LIBRARY.find((pack) => pack.id === packId))
+        .filter(Boolean),
+    [activeCollection],
+  );
+  const loadedCollections = useMemo(
+    () =>
+      PACK_COLLECTIONS.filter((collection) =>
+        collection.packIds.some((packId) => activeProject?.selectedPacks?.includes(packId)),
+      ),
+    [activeProject],
+  );
   const pluginSnippet = useMemo(
     () =>
       JSON.stringify(
@@ -1266,6 +1348,7 @@ function App() {
       projects: [project, ...current.projects],
       activeProjectId: project.id,
     }));
+    setWorkspacePane("build");
     setWorkspaceState(emptyWorkspaceState());
     setPrompt("");
     setError("");
@@ -1294,6 +1377,26 @@ function App() {
     const next = current.includes(packId)
       ? current.filter((id) => id !== packId)
       : [...current, packId];
+    updateActiveProject({ selectedPacks: next });
+  }
+
+  function openCollection(collectionId) {
+    setSelectedCollectionId(collectionId);
+    setWorkspacePane("library");
+  }
+
+  function toggleCollection(collectionId) {
+    const collection = PACK_COLLECTIONS.find((entry) => entry.id === collectionId);
+    if (!collection || !activeProject) {
+      return;
+    }
+
+    const current = activeProject.selectedPacks || [];
+    const hasWholeCollection = collection.packIds.every((packId) => current.includes(packId));
+    const next = hasWholeCollection
+      ? current.filter((packId) => !collection.packIds.includes(packId))
+      : [...new Set([...current, ...collection.packIds])];
+
     updateActiveProject({ selectedPacks: next });
   }
 
@@ -1344,6 +1447,7 @@ function App() {
       return;
     }
 
+    setWorkspacePane("build");
     setView("workspace");
   }
 
@@ -1381,6 +1485,7 @@ function App() {
           onSelect={(choice) => {
             saveOnboardingChoice(choice);
             setOnboardingOpen(false);
+            setWorkspacePane("build");
             setView("workspace");
           }}
         />
@@ -1418,7 +1523,10 @@ function App() {
                     className={`workspace-item ${active ? "workspace-item-active" : ""}`}
                     key={project.id}
                     type="button"
-                    onClick={() => setApp((current) => ({ ...current, activeProjectId: project.id }))}
+                    onClick={() => {
+                      setApp((current) => ({ ...current, activeProjectId: project.id }));
+                      setWorkspacePane("build");
+                    }}
                   >
                     <div className="workspace-item-copy">
                       <strong>{project.name}</strong>
@@ -1442,18 +1550,25 @@ function App() {
           </div>
 
           <div className="sidebar-section">
-            <div className="sidebar-label">Pair Code</div>
-            <div className="sidebar-card">
-              <div className="pair-code">{pluginPairCode || "NO-CODE-YET"}</div>
-              <button className="text-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>
-                Copy pair code
-              </button>
+            <div className="sidebar-label">Open</div>
+            <div className="workspace-nav">
+              {WORKSPACE_PANES.map((pane) => (
+                <button
+                  className={`workspace-nav-item ${workspacePane === pane.id ? "workspace-nav-item-active" : ""}`}
+                  key={pane.id}
+                  type="button"
+                  onClick={() => setWorkspacePane(pane.id)}
+                >
+                  <strong>{pane.label}</strong>
+                  <span>{pane.title}</span>
+                </button>
+              ))}
             </div>
           </div>
 
           <div className="sidebar-section sidebar-bottom">
-            <div className="sidebar-label">Studio</div>
-            <div className="sidebar-card">
+            <div className="sidebar-label">Status</div>
+            <div className="sidebar-card sidebar-status-card">
               <div className="status-line">
                 <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
                 <span>{workspaceState.pluginOnline ? "Studio connected" : "Studio waiting"}</span>
@@ -1464,16 +1579,20 @@ function App() {
                   <span>Paired from Roblox Studio</span>
                 </div>
               ) : null}
-              <button className="secondary-button" type="button" onClick={downloadPluginFile}>
-                Download Plugin
-              </button>
-              <button
-                className="text-button"
-                type="button"
-                onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
-              >
-                Copy plugin path hint
-              </button>
+              <p className="sidebar-status-copy">
+                {workspacePane === "studio"
+                  ? workspaceState.pluginOnline
+                    ? "Studio is linked and polling for changes."
+                    : "Open Studio setup to install the plugin and pair this workspace."
+                  : latestJob
+                    ? `${formatStatus(latestJob.status)} · ${latestJob.title}`
+                    : "Start in Build, then open Library or Studio when you need them."}
+              </p>
+              {workspacePane !== "studio" ? (
+                <button className="text-button" type="button" onClick={() => setWorkspacePane("studio")}>
+                  Open Studio setup
+                </button>
+              ) : null}
             </div>
           </div>
         </aside>
@@ -1481,12 +1600,9 @@ function App() {
         <section className="main-shell">
           <header className="main-header">
             <div>
+              <span className="pane-eyebrow">{activePane.title}</span>
               <h1>{activeProject?.name || "Workspace"}</h1>
-              <p>
-                {workspaceState.pluginOnline
-                  ? "Roblox Studio is connected and checking for jobs."
-                  : "Install the plugin in Roblox Studio, connect with the pair code, then start sync."}
-              </p>
+              <p>{activePane.subtitle}</p>
             </div>
             <div className="main-header-actions">
               <label className="model-select-shell">
@@ -1514,82 +1630,278 @@ function App() {
             </div>
           </header>
 
+          <div className="workspace-tabs">
+            {WORKSPACE_PANES.map((pane) => (
+              <button
+                className={`workspace-tab ${workspacePane === pane.id ? "workspace-tab-active" : ""}`}
+                key={pane.id}
+                type="button"
+                onClick={() => setWorkspacePane(pane.id)}
+              >
+                {pane.label}
+              </button>
+            ))}
+          </div>
+
           <div className="content-grid">
             <section className="chat-panel">
-              <div className="chat-scroll">
-                {orderedMessages.length ? (
-                  <div className="message-list">
-                    {orderedMessages.map((message) => (
-                      <div
-                        className={`message-row ${
-                          message.role === "user" ? "message-row-user" : "message-row-assistant"
-                        }`}
-                        key={message.id}
-                      >
-                        <div className={`message-bubble message-bubble-${message.role}`}>
-                          <div className="message-role">{message.role === "user" ? "You" : PRODUCT_NAME}</div>
-                          <div className="message-content">{message.content}</div>
+              {workspacePane === "build" ? (
+                <>
+                  <div className="chat-scroll">
+                    {orderedMessages.length ? (
+                      <div className="message-list">
+                        {orderedMessages.map((message) => (
+                          <div
+                            className={`message-row ${
+                              message.role === "user" ? "message-row-user" : "message-row-assistant"
+                            }`}
+                            key={message.id}
+                          >
+                            <div className={`message-bubble message-bubble-${message.role}`}>
+                              <div className="message-role">{message.role === "user" ? "You" : PRODUCT_NAME}</div>
+                              <div className="message-content">{message.content}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="chat-empty">
+                        <div className="chat-empty-logo">{PRODUCT_NAME}</div>
+                        <h2>What do you want to build in Roblox?</h2>
+                        <p>Start with a prompt below. The app will queue a structured plan, and the Studio plugin can claim and apply it automatically.</p>
+                        <div className="suggestion-grid">
+                          {PROMPT_SUGGESTIONS.map((suggestion) => (
+                            <button
+                              className="suggestion-card"
+                              key={suggestion}
+                              type="button"
+                              onClick={() => {
+                                setPrompt(suggestion);
+                                textareaRef.current?.focus();
+                              }}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
-                ) : (
-                  <div className="chat-empty">
-                    <div className="chat-empty-logo">{PRODUCT_NAME}</div>
-                    <h2>What do you want to build in Roblox?</h2>
-                    <p>Start with a prompt below. The app will queue a structured plan, and the Studio plugin can claim and apply it automatically.</p>
-                    <div className="suggestion-grid">
-                      {PROMPT_SUGGESTIONS.map((suggestion) => (
-                        <button
-                          className="suggestion-card"
-                          key={suggestion}
-                          type="button"
-                          onClick={() => {
-                            setPrompt(suggestion);
-                            textareaRef.current?.focus();
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
 
-              <div className="composer-panel">
-                {error ? <div className="notice notice-error">{error}</div> : null}
-                {copyFeedback ? <div className="notice notice-success">{copyFeedback}</div> : null}
-                <form className="composer-form" onSubmit={submitPrompt}>
-                  <textarea
-                    ref={textareaRef}
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    onKeyDown={handleTextareaKeyDown}
-                    placeholder="Describe a mechanic, UI, or system you want Zest to build in Roblox Studio..."
-                    rows={4}
-                  />
-                  <div className="composer-footer">
-                    <div className="composer-meta">
-                      <span className="composer-pill">{selectedModel?.label || "No model"}</span>
-                      <span className="composer-pill">{isAuthenticated ? "roblox" : workspaceState.accessMode || "guest"}</span>
-                      <span className="composer-pill">{workspaceState.pluginOnline ? "Studio ready" : "Studio not paired"}</span>
+                  <div className="composer-panel">
+                    {error ? <div className="notice notice-error">{error}</div> : null}
+                    {copyFeedback ? <div className="notice notice-success">{copyFeedback}</div> : null}
+                    <form className="composer-form" onSubmit={submitPrompt}>
+                      <textarea
+                        ref={textareaRef}
+                        value={prompt}
+                        onChange={(event) => setPrompt(event.target.value)}
+                        onKeyDown={handleTextareaKeyDown}
+                        placeholder="Describe a mechanic, UI, or system you want Zest to build in Roblox Studio..."
+                        rows={4}
+                      />
+                      <div className="composer-footer">
+                        <div className="composer-meta">
+                          <span className="composer-pill">{selectedModel?.label || "No model"}</span>
+                          <span className="composer-pill">{isAuthenticated ? "roblox" : workspaceState.accessMode || "guest"}</span>
+                          <span className="composer-pill">{workspaceState.pluginOnline ? "Studio ready" : "Studio not paired"}</span>
+                        </div>
+                        <div className="composer-send-group">
+                          <span className="composer-hint">Ctrl+Enter to send</span>
+                          <button className="primary-button" type="submit" disabled={isSubmitting || !isAuthenticated}>
+                            {isSubmitting ? "Generating..." : "Send"}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </>
+              ) : workspacePane === "library" ? (
+                <div className="mode-scroll">
+                  <div className="library-shell">
+                    <div className="library-hero">
+                      <span className="chat-empty-logo">Library</span>
+                      <h2>Pick a system family first.</h2>
+                      <p>Open one focused set of building blocks at a time. Inventory can open cards, economy, and save layers without crowding your main workspace.</p>
                     </div>
-                    <div className="composer-send-group">
-                      <span className="composer-hint">Ctrl+Enter to send</span>
-                      <button className="primary-button" type="submit" disabled={isSubmitting || !isAuthenticated}>
-                        {isSubmitting ? "Generating..." : "Send"}
-                      </button>
+
+                    <div className="collection-grid">
+                      {PACK_COLLECTIONS.map((collection) => {
+                        const active = collection.id === activeCollection.id;
+                        const loaded = collection.packIds.filter((packId) =>
+                          activeProject?.selectedPacks?.includes(packId),
+                        ).length;
+                        return (
+                          <button
+                            className={`collection-card ${active ? "collection-card-active" : ""}`}
+                            key={collection.id}
+                            type="button"
+                            onClick={() => setSelectedCollectionId(collection.id)}
+                          >
+                            <div className="collection-card-head">
+                              <strong>{collection.name}</strong>
+                              <span>{loaded}/{collection.packIds.length} loaded</span>
+                            </div>
+                            <p>{collection.blurb}</p>
+                            <div className="collection-card-tags">
+                              {collection.packIds.map((packId) => {
+                                const pack = PACK_LIBRARY.find((entry) => entry.id === packId);
+                                return pack ? <span key={pack.id}>{pack.name}</span> : null;
+                              })}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="library-preview">
+                      <div className="library-preview-head">
+                        <div>
+                          <span className="sidebar-label">Open collection</span>
+                          <h2>{activeCollection.name}</h2>
+                        </div>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => toggleCollection(activeCollection.id)}
+                        >
+                          {activeCollection.packIds.every((packId) => activeProject?.selectedPacks?.includes(packId))
+                            ? "Unload collection"
+                            : "Load collection"}
+                        </button>
+                      </div>
+                      <p>{activeCollection.blurb}</p>
+
+                      <div className="library-pack-grid">
+                        {activeCollectionPacks.map((pack) => {
+                          const active = activeProject?.selectedPacks?.includes(pack.id);
+                          return (
+                            <button
+                              className={`library-pack-card ${active ? "library-pack-card-active" : ""}`}
+                              key={pack.id}
+                              type="button"
+                              onClick={() => togglePack(pack.id)}
+                            >
+                              <strong>{pack.name}</strong>
+                              <p>{pack.description}</p>
+                              <span>{active ? "Loaded into this workspace" : "Click to add"}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="library-idea-list">
+                        {activeCollection.promptIdeas.map((idea) => (
+                          <button
+                            className="suggestion-card"
+                            key={idea}
+                            type="button"
+                            onClick={() => {
+                              setPrompt(idea);
+                              setWorkspacePane("build");
+                              window.setTimeout(() => textareaRef.current?.focus(), 0);
+                            }}
+                          >
+                            {idea}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </form>
-              </div>
+                </div>
+              ) : workspacePane === "studio" ? (
+                <div className="mode-scroll">
+                  <div className="studio-setup-shell">
+                    <div className="studio-setup-card">
+                      <span className="sidebar-label">Step 01</span>
+                      <h2>Install the plugin</h2>
+                      <p>Download the plugin, drop it into the Roblox plugins folder, then restart Studio once.</p>
+                      <div className="studio-action-row">
+                        <button className="primary-button" type="button" onClick={downloadPluginFile}>
+                          Download Plugin
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => copyText(PLUGIN_FOLDER_HINT, "Plugins folder hint")}
+                        >
+                          Copy plugin folder path
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="studio-setup-grid">
+                      <div className="studio-setup-card">
+                        <span className="sidebar-label">Step 02</span>
+                        <h2>Pair this workspace</h2>
+                        <div className="pair-code">{pluginPairCode || "NO-CODE-YET"}</div>
+                        <p>Paste this code inside the Studio plugin so it knows which workspace should receive jobs.</p>
+                        <button className="secondary-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>
+                          Copy pair code
+                        </button>
+                      </div>
+
+                      <div className="studio-setup-card">
+                        <span className="sidebar-label">Step 03</span>
+                        <h2>Check connection</h2>
+                        <div className="status-line">
+                          <span className={`status-dot ${workspaceState.pluginOnline ? "status-dot-live" : ""}`} />
+                          <span>{workspaceState.pluginOnline ? "Studio connected" : "Studio waiting"}</span>
+                        </div>
+                        <p>
+                          {workspaceState.pluginOnline
+                            ? "This workspace is live and Roblox Studio is already polling for jobs."
+                            : "After pairing, the plugin will start claiming jobs and reporting results back here."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mode-scroll">
+                  <div className="jobs-shell">
+                    <div className="library-hero">
+                      <span className="chat-empty-logo">Jobs</span>
+                      <h2>See what Zest already generated.</h2>
+                      <p>Use this view to inspect recent runs instead of mixing job history into your build screen.</p>
+                    </div>
+                    {recentJobs.length ? (
+                      <div className="job-list job-list-expanded">
+                        {recentJobs.map((job) => (
+                          <div className="job-item" key={job.id}>
+                            <div className="job-item-head">
+                              <strong>{job.title}</strong>
+                              <span className={`job-status job-status-${job.status}`}>{formatStatus(job.status)}</span>
+                            </div>
+                            <p>{job.summary || "No summary returned."}</p>
+                            <div className="job-item-meta">
+                              <span>{job.model_key || "Unknown model"}</span>
+                              <span>{formatDateTime(job.created_at)}</span>
+                            </div>
+                            {Array.isArray(job.operations) && job.operations.length ? (
+                              <div className="job-operation-list">
+                                {job.operations.map((operation, index) => (
+                                  <span className="job-operation-pill" key={`${job.id}-${index}`}>
+                                    {summarizeOperation(operation)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty-state-small">No jobs yet.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             <aside className="utility-column">
               <section className="utility-card">
                 <div className="utility-card-head">
-                  <h2>Project Settings</h2>
+                  <h2>Workspace Basics</h2>
                   <span>{lastSyncedAt ? `Synced ${formatDateTime(lastSyncedAt)}` : "Not synced"}</span>
                 </div>
                 <label className="field">
@@ -1607,18 +1919,18 @@ function App() {
                     onChange={(event) => updateActiveProject({ description: event.target.value })}
                   />
                 </label>
-                <label className="field">
-                  <span>Polling seconds</span>
-                  <input
-                    type="number"
-                    min="2"
-                    max="30"
-                    value={app.pollingSeconds}
-                    onChange={(event) => updateApp("pollingSeconds", event.target.value)}
-                  />
-                </label>
                 <details className="details-block">
-                  <summary>Advanced</summary>
+                  <summary>More settings</summary>
+                  <label className="field">
+                    <span>Polling seconds</span>
+                    <input
+                      type="number"
+                      min="2"
+                      max="30"
+                      value={app.pollingSeconds}
+                      onChange={(event) => updateApp("pollingSeconds", event.target.value)}
+                    />
+                  </label>
                   <label className="field">
                     <span>Supabase project URL</span>
                     <input
@@ -1652,63 +1964,123 @@ function App() {
                 </details>
               </section>
 
-              <section className="utility-card">
-                <div className="utility-card-head">
-                  <h2>Packs</h2>
-                  <span>{selectedPacks.length} loaded</span>
-                </div>
-                <div className="pack-list">
-                  {PACK_LIBRARY.map((pack) => {
-                    const active = activeProject?.selectedPacks?.includes(pack.id);
-                    return (
-                      <label className={`pack-item ${active ? "pack-item-active" : ""}`} key={pack.id}>
-                        <input checked={active} type="checkbox" onChange={() => togglePack(pack.id)} />
-                        <div>
+              {workspacePane === "library" ? (
+                <section className="utility-card">
+                  <div className="utility-card-head">
+                    <h2>{activeCollection.name}</h2>
+                    <span>{activeCollectionPacks.length} packs</span>
+                  </div>
+                  <p className="utility-copy">{activeCollection.blurb}</p>
+                  <div className="pack-list">
+                    {activeCollectionPacks.map((pack) => {
+                      const active = activeProject?.selectedPacks?.includes(pack.id);
+                      return (
+                        <label className={`pack-item ${active ? "pack-item-active" : ""}`} key={pack.id}>
+                          <input checked={active} type="checkbox" onChange={() => togglePack(pack.id)} />
+                          <div>
+                            <strong>{pack.name}</strong>
+                            <span>{pack.description}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : workspacePane === "studio" ? (
+                <section className="utility-card">
+                  <div className="utility-card-head">
+                    <h2>Studio Pairing</h2>
+                    <span>{workspaceState.pluginOnline ? "Live" : "Waiting"}</span>
+                  </div>
+                  <div className="pair-code">{pluginPairCode || "NO-CODE-YET"}</div>
+                  <div className="field-action-row utility-button-stack">
+                    <button className="secondary-button" type="button" onClick={() => copyText(pluginPairCode, "Pair code")}>
+                      Copy pair code
+                    </button>
+                    <button className="secondary-button" type="button" onClick={downloadPluginFile}>
+                      Download plugin
+                    </button>
+                  </div>
+                  <p className="utility-copy">
+                    {studioAuth?.username
+                      ? `Connected from @${studioAuth.username}.`
+                      : "Use the plugin in Roblox Studio and paste the code shown here."}
+                  </p>
+                </section>
+              ) : (
+                <section className="utility-card">
+                  <div className="utility-card-head">
+                    <h2>Loaded Systems</h2>
+                    <span>{selectedPacks.length} loaded</span>
+                  </div>
+                  <div className="selected-pack-stack">
+                    {selectedPacks.length ? (
+                      selectedPacks.map((pack) => (
+                        <button
+                          className="selected-pack-chip"
+                          key={pack.id}
+                          type="button"
+                          onClick={() => {
+                            const matchingCollection = PACK_COLLECTIONS.find((collection) =>
+                              collection.packIds.includes(pack.id),
+                            );
+                            if (matchingCollection) {
+                              openCollection(matchingCollection.id);
+                            }
+                          }}
+                        >
                           <strong>{pack.name}</strong>
                           <span>{pack.description}</span>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="utility-card">
-                <div className="utility-card-head">
-                  <h2>Recent Jobs</h2>
-                  <button className="text-button" type="button" onClick={() => refreshWorkspace({ ensure: false, silent: false })}>
-                    Refresh
-                  </button>
-                </div>
-                {recentJobs.length ? (
-                  <div className="job-list">
-                    {recentJobs.map((job) => (
-                      <div className="job-item" key={job.id}>
-                        <div className="job-item-head">
-                          <strong>{job.title}</strong>
-                          <span className={`job-status job-status-${job.status}`}>{formatStatus(job.status)}</span>
-                        </div>
-                        <p>{job.summary || "No summary returned."}</p>
-                        <div className="job-item-meta">
-                          <span>{job.model_key || "Unknown model"}</span>
-                          <span>{formatDateTime(job.created_at)}</span>
-                        </div>
-                        {Array.isArray(job.operations) && job.operations.length ? (
-                          <div className="job-operation-list">
-                            {job.operations.slice(0, 3).map((operation, index) => (
-                              <span className="job-operation-pill" key={`${job.id}-${index}`}>
-                                {summarizeOperation(operation)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="empty-state-small">No systems loaded yet. Open Library to add one.</div>
+                    )}
                   </div>
-                ) : (
-                  <div className="empty-state-small">No jobs yet.</div>
-                )}
-              </section>
+                  <div className="field-action-row">
+                    <button className="secondary-button" type="button" onClick={() => setWorkspacePane("library")}>
+                      Open library
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {workspacePane !== "jobs" ? (
+                <section className="utility-card">
+                  <div className="utility-card-head">
+                    <h2>Quick Progress</h2>
+                    <button className="text-button" type="button" onClick={() => refreshWorkspace({ ensure: false, silent: false })}>
+                      Refresh
+                    </button>
+                  </div>
+                  <div className="progress-mini-grid">
+                    <div className="progress-mini-card">
+                      <strong>{loadedCollections.length}</strong>
+                      <span>system groups active</span>
+                    </div>
+                    <div className="progress-mini-card">
+                      <strong>{recentJobs.length}</strong>
+                      <span>jobs in history</span>
+                    </div>
+                    <div className="progress-mini-card">
+                      <strong>{workspaceState.pluginOnline ? "live" : "idle"}</strong>
+                      <span>studio status</span>
+                    </div>
+                  </div>
+                  {latestJob ? (
+                    <div className="job-mini-card">
+                      <div className="job-item-head">
+                        <strong>{latestJob.title}</strong>
+                        <span className={`job-status job-status-${latestJob.status}`}>{formatStatus(latestJob.status)}</span>
+                      </div>
+                      <p>{latestJob.summary || "No summary returned."}</p>
+                      <button className="text-button" type="button" onClick={() => setWorkspacePane("jobs")}>
+                        Open all jobs
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
             </aside>
           </div>
         </section>
