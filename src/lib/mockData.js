@@ -1,6 +1,5 @@
 import {
   LOCAL_MODEL_CATALOG,
-  MOCK_ACCOUNT,
   PACK_COLLECTIONS,
 } from "./constants";
 import {
@@ -8,24 +7,36 @@ import {
   createAssistantPayload,
   createId,
   createMockJob,
-  createPairCode,
+  createWorkspaceToken,
   createUserMessage,
+  pairCodeFromWorkspaceToken,
 } from "./helpers";
+
+const EMPTY_ACCOUNT = {
+  displayName: "",
+  username: "",
+  role: "Roblox account",
+};
 
 function createWorkspaceBase(overrides = {}) {
   const now = new Date().toISOString();
+  const workspaceToken = overrides.workspaceToken || createWorkspaceToken();
+
   return {
     id: createId("workspace"),
     name: "New Workspace",
     description: "A focused Roblox workspace for UI systems, gameplay loops, and Studio-ready mock output.",
+    workspaceToken,
+    accessMode: "guest",
     modelKey: LOCAL_MODEL_CATALOG[0].key,
     selectedPackIds: ["inventory-ui", "economy-core"],
     promptDraft: "",
     messages: [],
     jobs: [],
-    pairCode: createPairCode(),
+    pairCode: pairCodeFromWorkspaceToken(workspaceToken),
     studioStatus: "waiting",
     pluginInstalled: false,
+    pluginOnline: false,
     syncPulse: false,
     lastSyncedAt: "",
     lastOpenedAt: now,
@@ -88,10 +99,10 @@ export function createDefaultAppState() {
   const starter = createStarterWorkspace();
 
   return {
-    isAuthenticated: true,
-    hasCompletedOnboarding: true,
-    onboardingChoice: "builder",
-    authProfile: MOCK_ACCOUNT,
+    isAuthenticated: false,
+    hasCompletedOnboarding: false,
+    onboardingChoice: "",
+    authProfile: EMPTY_ACCOUNT,
     workspaces: [sample, starter],
     activeWorkspaceId: sample.id,
   };

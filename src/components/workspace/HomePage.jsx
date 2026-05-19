@@ -84,7 +84,11 @@ export function HomePage({
       <nav className="home-nav">
         <div className="home-nav-inner">
           <BrandLockup />
-          <button className="primary-button home-nav-cta" type="button" onClick={isAuthenticated ? onPrimaryAction : onOpenAuth}>
+          <button
+            className="primary-button home-nav-cta"
+            type="button"
+            onClick={isAuthenticated ? onPrimaryAction : onOpenAuth}
+          >
             {isAuthenticated ? "Dashboard" : "Sign up"}
           </button>
         </div>
@@ -95,27 +99,48 @@ export function HomePage({
         <div className="home-hero-eyebrow motion-reveal" data-reveal>
           Sign in with Roblox · Build in Studio
         </div>
-        <h1 className="home-hero-headline motion-reveal" data-reveal style={{ "--reveal-delay": "80ms" }}>
+        <h1
+          className="home-hero-headline motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "80ms" }}
+        >
           The easiest AI builder
           <br />
           <span className="home-hero-accent">for Roblox Studio.</span>
         </h1>
-        <p className="home-hero-sub motion-reveal" data-reveal style={{ "--reveal-delay": "140ms" }}>
-          Keep the clean product surface you already like, then jump into a calmer workspace with chat,
-          system packs, Studio pairing, and mock Roblox outputs.
+        <p
+          className="home-hero-sub motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "140ms" }}
+        >
+          Keep the clean product surface you already like, then jump into a calmer
+          workspace with chat, system packs, Studio pairing, and real Edge Function-backed
+          build history.
         </p>
-        <div className="home-hero-actions motion-reveal" data-reveal style={{ "--reveal-delay": "200ms" }}>
-          <button className="primary-button home-hero-btn" type="button" onClick={isAuthenticated ? onPrimaryAction : onOpenAuth}>
+        <div
+          className="home-hero-actions motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "200ms" }}
+        >
+          <button
+            className="primary-button home-hero-btn"
+            type="button"
+            onClick={isAuthenticated ? onPrimaryAction : onOpenAuth}
+          >
             {ctaLabel}
           </button>
           <span className="home-hero-note home-hero-note-dynamic">
             {isAuthenticated
               ? `Signed in as @${authProfile.username}`
-              : "Frontend-only preview · Official auth can come later"}
+              : "Official Roblox auth · Workspace and Studio sync ready"}
           </span>
         </div>
 
-        <div className="home-terminal motion-reveal" data-reveal style={{ "--reveal-delay": "260ms" }}>
+        <div
+          className="home-terminal motion-reveal"
+          data-reveal
+          style={{ "--reveal-delay": "260ms" }}
+        >
           <div className="home-terminal-bar">
             <span className="home-terminal-dot" style={{ background: "#ff5f56" }} />
             <span className="home-terminal-dot" style={{ background: "#ffbd2e" }} />
@@ -131,11 +156,14 @@ export function HomePage({
               <span className="home-terminal-tag" style={{ color: "#c7ef5d" }}>
                 {PRODUCT_NAME}
               </span>
-              <p>Drafting client sprint UI, shared config, and a lightweight server state preview. Studio sync ready when you are.</p>
+              <p>
+                Drafting client sprint UI, shared config, and the next Studio job plan.
+                Workspace sync ready when you are.
+              </p>
             </div>
             <div className="home-terminal-status">
               <span className="status-dot status-dot-live" />
-              Mock build preview · Calm workspace · Studio pairing drawer
+              Live auth · Calm workspace · Studio pairing drawer
             </div>
           </div>
         </div>
@@ -145,19 +173,25 @@ export function HomePage({
         <div className="home-section-inner">
           <div className="home-auth-card motion-reveal" data-reveal>
             <div className="home-auth-copy">
-              <span className={`home-auth-status ${isAuthenticated ? "home-auth-status-live" : ""}`}>
+              <span
+                className={`home-auth-status ${isAuthenticated ? "home-auth-status-live" : ""}`}
+              >
                 {isAuthenticated ? "Signed in with Roblox" : "Waiting for login"}
               </span>
               <h2>{isAuthenticated ? "Your workspace preview is ready." : "Sign in before you start building."}</h2>
               <p>
                 {isAuthenticated
-                  ? `You are signed in as ${authProfile.displayName}. Open ${workspaceName}, preview the Studio flow, and keep everything local for now.`
-                  : "Use the mock sign-in flow to enter the frontend preview, then install the plugin and pair Studio when you want to test the setup UX."}
+                  ? `You are signed in as ${authProfile.displayName}. Open ${workspaceName}, generate real jobs through Supabase, and keep Studio pairing in one focused place.`
+                  : "Use the Roblox sign-in flow to enter the workspace, then install the plugin and pair Studio when you want to connect it."}
               </p>
 
               <div className="home-auth-action-row">
                 {isAuthenticated ? (
-                  <button className="primary-button home-auth-enter" type="button" onClick={onPrimaryAction}>
+                  <button
+                    className="primary-button home-auth-enter"
+                    type="button"
+                    onClick={onPrimaryAction}
+                  >
                     {hasCompletedOnboarding ? "Continue to workspace" : "Finish setup"}
                   </button>
                 ) : (
@@ -184,12 +218,18 @@ export function HomePage({
                 <span>02</span>
                 <strong>Copy the pair code</strong>
                 <div className="home-auth-pair">{pairCode}</div>
-                <p>Use the Studio drawer when you want the pairing preview without cluttering the main screen.</p>
+                <p>
+                  Use the Studio drawer when you want the pairing flow without cluttering the
+                  main screen.
+                </p>
               </div>
               <div className="home-auth-step">
                 <span>03</span>
                 <strong>Install the plugin</strong>
-                <p>Download the current plugin file, place it into Roblox Plugins, then reconnect from the Studio page.</p>
+                <p>
+                  Download the current plugin file, place it into Roblox Plugins, then reconnect
+                  from the Studio page.
+                </p>
               </div>
             </div>
           </div>
@@ -203,7 +243,12 @@ export function HomePage({
           </h2>
           <div className="home-feature-grid">
             {HOME_FEATURES.map((feature, index) => (
-              <div className="home-feature-card motion-reveal" data-reveal key={feature.title} style={{ "--reveal-delay": `${80 + index * 70}ms` }}>
+              <div
+                className="home-feature-card motion-reveal"
+                data-reveal
+                key={feature.title}
+                style={{ "--reveal-delay": `${80 + index * 70}ms` }}
+              >
                 <div className="home-feature-icon">{feature.icon}</div>
                 <h3>{feature.title}</h3>
                 <p>{feature.body}</p>
@@ -220,7 +265,12 @@ export function HomePage({
           </h2>
           <div className="home-steps-grid">
             {HOME_STEPS.map((step, index) => (
-              <div className="home-step motion-reveal" data-reveal key={step.num} style={{ "--reveal-delay": `${80 + index * 70}ms` }}>
+              <div
+                className="home-step motion-reveal"
+                data-reveal
+                key={step.num}
+                style={{ "--reveal-delay": `${80 + index * 70}ms` }}
+              >
                 <div className="home-step-num">{step.num}</div>
                 <h3>{step.label}</h3>
                 <p>{step.body}</p>

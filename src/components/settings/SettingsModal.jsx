@@ -16,7 +16,7 @@ export function SettingsModal({
     models: (
       <div className="settings-section-body">
         <h3>Models</h3>
-        <p className="drawer-copy">Preview model routing and selection states with local-only data.</p>
+        <p className="drawer-copy">Pick the model that the generate-job Edge Function should route to next.</p>
         <div className="settings-model-list">
           {LOCAL_MODEL_CATALOG.map((model) => (
             <div className={`settings-model-card ${workspace.modelKey === model.key ? "settings-model-card-active" : ""}`} key={model.key}>
@@ -68,7 +68,7 @@ export function SettingsModal({
     account: (
       <div className="settings-section-body">
         <h3>Account settings</h3>
-        <p className="drawer-copy">This build keeps account state fully local while preserving the product feel.</p>
+        <p className="drawer-copy">Your Roblox identity now comes from the live Supabase session.</p>
         <div className="settings-detail-grid">
           <div className="settings-detail-card">
             <strong>@{account.username}</strong>

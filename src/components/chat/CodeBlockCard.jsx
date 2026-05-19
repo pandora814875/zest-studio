@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Prism from "prismjs";
+import "prismjs/components/prism-lua";
 
 export function CodeBlockCard({ block }) {
   const [copied, setCopied] = useState(false);
+  const highlightedCode = useMemo(() => {
+    const language = block.language === "lua" ? "lua" : "lua";
+
+    return Prism.highlight(block.code || "", Prism.languages[language], language);
+  }, [block.code, block.language]);
 
   async function handleCopy() {
     try {
@@ -25,7 +32,10 @@ export function CodeBlockCard({ block }) {
         </button>
       </div>
       <pre className="code-block-pre">
-        <code>{block.code}</code>
+        <code
+          className={`language-${block.language || "lua"}`}
+          dangerouslySetInnerHTML={{ __html: highlightedCode }}
+        />
       </pre>
     </div>
   );

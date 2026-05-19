@@ -34,6 +34,13 @@ export function ChatHistory({ messages }) {
           );
         }
 
+        const summary = message.summary || message.text || "Plan ready";
+        const body =
+          message.body && message.body !== summary ? message.body : message.text && message.text !== summary ? message.text : "";
+        const bullets = Array.isArray(message.bullets) ? message.bullets : [];
+        const tags = Array.isArray(message.tags) ? message.tags : [];
+        const codeBlocks = Array.isArray(message.codeBlocks) ? message.codeBlocks : [];
+
         return (
           <div className="message-row message-row-assistant" key={message.id}>
             <div className="message-bubble message-bubble-assistant message-bubble-rich">
@@ -41,25 +48,31 @@ export function ChatHistory({ messages }) {
                 <div className="message-role">{PRODUCT_NAME}</div>
                 <span>{formatDateTime(message.createdAt)}</span>
               </div>
-              <div className="message-content">{message.summary}</div>
-              <p className="message-body">{message.body}</p>
-              <ul className="message-bullet-list">
-                {(message.bullets || []).map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
-                ))}
-              </ul>
-              <div className="message-tag-row">
-                {(message.tags || []).map((tag) => (
-                  <span className="composer-pill" key={tag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <div className="message-code-stack">
-                {(message.codeBlocks || []).map((block) => (
-                  <CodeBlockCard block={block} key={block.id} />
-                ))}
-              </div>
+              <div className="message-content">{summary}</div>
+              {body ? <p className="message-body">{body}</p> : null}
+              {bullets.length ? (
+                <ul className="message-bullet-list">
+                  {bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {tags.length ? (
+                <div className="message-tag-row">
+                  {tags.map((tag) => (
+                    <span className="composer-pill" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {codeBlocks.length ? (
+                <div className="message-code-stack">
+                  {codeBlocks.map((block) => (
+                    <CodeBlockCard block={block} key={block.id} />
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         );

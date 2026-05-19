@@ -163,7 +163,12 @@ export default function App() {
         />
       )}
 
-      <AuthModal open={ui.authModalOpen} onClose={closeAuthModal} onContinue={continueMockSignIn} />
+      <AuthModal
+        open={ui.authModalOpen}
+        onClose={closeAuthModal}
+        onContinue={continueMockSignIn}
+        authError={ui.authError}
+      />
 
       <OnboardingModal
         open={ui.onboardingOpen}

@@ -124,6 +124,25 @@ export function createId(prefix = "item") {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createWorkspaceToken() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID().replaceAll("-", "");
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 18)}`;
+}
+
+export function normalizePairCode(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+export function pairCodeFromWorkspaceToken(workspaceToken) {
+  return normalizePairCode(workspaceToken).slice(0, 16).toUpperCase().replace(/(.{4})/g, "$1-").replace(/-$/, "");
+}
+
 export function createPairCode() {
   const segment = () => Math.random().toString(16).slice(2, 6).toUpperCase();
   return `${segment()}-${segment()}-${segment()}-${segment()}`;

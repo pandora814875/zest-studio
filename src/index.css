@@ -2650,12 +2650,19 @@ summary::-webkit-details-marker { display: none; }
 .code-block-pre {
   margin: 0;
   overflow-x: auto;
-  padding: 16px;
+  padding: 0;
   border-radius: 16px;
   background: #0f0f0f;
   border: 1px solid #1e1e1e;
   font-size: 0.81rem;
   line-height: 1.6;
+}
+
+.code-block-pre code[class*="language-"] {
+  display: block;
+  min-width: max-content;
+  padding: 16px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 .dialog-overlay {

@@ -10,8 +10,15 @@ export function StudioPanel({
   onReconnect,
   onSetInstalled,
 }) {
-  const connected = workspace.studioStatus === "connected";
+  const connected = Boolean(workspace.pluginOnline);
   const syncing = workspace.studioStatus === "syncing";
+  const statusLabel = connected
+    ? "connected"
+    : syncing
+      ? "syncing"
+      : workspace.pluginInstalled
+        ? "pairing"
+        : "waiting";
 
   return (
     <div className="drawer-stack">
@@ -19,10 +26,10 @@ export function StudioPanel({
         <div className="drawer-card-head">
           <div>
             <h3>Connection status</h3>
-            <p className="drawer-copy">Keep the pairing UI clean, readable, and ready for a future live backend.</p>
+            <p className="drawer-copy">This now reads the live plugin heartbeat from the workspace-state function.</p>
           </div>
-          <span className={`studio-status-pill studio-status-${workspace.studioStatus}`}>
-            {workspace.studioStatus}
+          <span className={`studio-status-pill studio-status-${statusLabel}`}>
+            {statusLabel}
           </span>
         </div>
         <div className="studio-pair-grid">
@@ -46,7 +53,7 @@ export function StudioPanel({
                 ? `Last synced ${formatDateTime(workspace.lastSyncedAt)}`
                 : "No sync activity yet"}
             </span>
-            <div className={`studio-sync-indicator ${workspace.syncPulse ? "studio-sync-indicator-live" : ""}`} />
+            <div className={`studio-sync-indicator ${workspace.pluginOnline ? "studio-sync-indicator-live" : ""}`} />
           </div>
         </div>
       </div>
@@ -55,7 +62,7 @@ export function StudioPanel({
         <div className="drawer-card-head">
           <div>
             <h3>Plugin install</h3>
-            <p className="drawer-copy">A polished setup preview with the steps kept out of the main build canvas.</p>
+            <p className="drawer-copy">Install the plugin once, then keep reconnecting from the same focused Studio panel.</p>
           </div>
         </div>
         <ol className="studio-step-list">
@@ -78,7 +85,7 @@ export function StudioPanel({
         <div className="drawer-card-head">
           <div>
             <h3>Connected Studio state</h3>
-            <p className="drawer-copy">Use this to preview waiting, connected, and reconnect behaviors with mock data.</p>
+            <p className="drawer-copy">The install toggle is local, but the connected label only comes from the live plugin heartbeat.</p>
           </div>
         </div>
         <div className="studio-toggle-row">
