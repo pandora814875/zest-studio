@@ -15,6 +15,7 @@ export function PromptComposer({
   promptError,
   copyFeedback,
   centered = false,
+  showSuggestions = true,
 }) {
   const textareaRef = useRef(null);
   useAutosizeTextarea(textareaRef, value);
@@ -36,18 +37,20 @@ export function PromptComposer({
       {promptError ? <div className="notice notice-error">{promptError}</div> : null}
       {copyFeedback ? <div className="notice notice-success">{copyFeedback}</div> : null}
       <div className={`composer-shell ${centered ? "composer-shell-centered" : ""}`}>
-        <div className="build-stage-suggestions composer-suggestion-row">
-          {BUILD_STAGE_SHORTCUTS.map((shortcut) => (
-            <button
-              className="suggestion-card suggestion-card-pill"
-              key={shortcut.label}
-              type="button"
-              onClick={() => onChange(shortcut.prompt)}
-            >
-              {shortcut.label}
-            </button>
-          ))}
-        </div>
+        {showSuggestions ? (
+          <div className="build-stage-suggestions composer-suggestion-row">
+            {BUILD_STAGE_SHORTCUTS.map((shortcut) => (
+              <button
+                className="suggestion-card suggestion-card-pill"
+                key={shortcut.label}
+                type="button"
+                onClick={() => onChange(shortcut.prompt)}
+              >
+                {shortcut.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <textarea
           ref={textareaRef}

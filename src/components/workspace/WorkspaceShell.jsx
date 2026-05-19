@@ -182,6 +182,7 @@ export function WorkspaceShell({
                   statusLabel={statusLabel}
                   promptError={ui.promptError}
                   copyFeedback={ui.copyFeedback}
+                  showSuggestions={false}
                 />
               </>
             ) : (
