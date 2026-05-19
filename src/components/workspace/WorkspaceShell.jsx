@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { LOCAL_MODEL_CATALOG, PACK_COLLECTIONS, WORKSPACE_DRAWERS } from "../../lib/constants";
 import { ChatHistory } from "../chat/ChatHistory";
 import { ExplorerPanel } from "../explorer/ExplorerPanel";
@@ -48,6 +49,7 @@ export function WorkspaceShell({
   onSignOut,
 }) {
   const activeDrawer = WORKSPACE_DRAWERS.find((drawer) => drawer.id === ui.activeDrawer);
+  const threadScrollRef = useRef(null);
   const selectedModel =
     LOCAL_MODEL_CATALOG.find((model) => model.key === activeWorkspace.modelKey) ||
     LOCAL_MODEL_CATALOG[0];
@@ -57,6 +59,18 @@ export function WorkspaceShell({
       : activeWorkspace.studioStatus === "syncing"
         ? "Syncing"
         : "Studio waiting";
+
+  useEffect(() => {
+    const container = threadScrollRef.current;
+    if (!container || !messages.length) {
+      return;
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length]);
 
   return (
     <div className="workspace-app workspace-app-clean">
@@ -100,13 +114,20 @@ export function WorkspaceShell({
                   {drawer.label}
                 </button>
               ))}
-              <button className="workspace-action-chip" type="button" onClick={() => onOpenSettings("models")}>
+              <button
+                className="workspace-action-chip"
+                type="button"
+                onClick={() => onOpenSettings("models")}
+              >
                 Settings
               </button>
             </div>
             <label className="model-select-shell">
               <span>Model</span>
-              <select value={activeWorkspace.modelKey} onChange={(event) => onSetModel(event.target.value)}>
+              <select
+                value={activeWorkspace.modelKey}
+                onChange={(event) => onSetModel(event.target.value)}
+              >
                 {LOCAL_MODEL_CATALOG.map((model) => (
                   <option key={model.key} value={model.key}>
                     {model.label} · {model.providerLabel}
@@ -126,13 +147,15 @@ export function WorkspaceShell({
               <WorkspaceSkeleton />
             ) : messages.length ? (
               <>
-                <div className="chat-scroll chat-scroll-thread">
+                <div className="chat-scroll chat-scroll-thread" ref={threadScrollRef}>
                   <div className="thread-shell">
                     <div className="thread-topbar">
                       <span className="chat-empty-logo thread-logo">Zest</span>
                       <div className="thread-topbar-pills">
                         {PACK_COLLECTIONS.filter((collection) =>
-                          collection.packIds.some((packId) => activeWorkspace.selectedPackIds.includes(packId)),
+                          collection.packIds.some((packId) =>
+                            activeWorkspace.selectedPackIds.includes(packId),
+                          ),
                         )
                           .slice(0, 3)
                           .map((collection) => (

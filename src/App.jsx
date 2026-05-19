@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import pluginSource from "../plugin/robolua-plugin.lua?raw";
-import { PRODUCT_NAME, PLUGIN_FOLDER_HINT } from "./lib/constants";
+import { PLUGIN_FOLDER_HINT } from "./lib/constants";
 import { useZestAppState } from "./hooks/useZestAppState";
 import { AuthModal } from "./components/modals/AuthModal";
 import { ConfirmModal } from "./components/modals/ConfirmModal";
@@ -70,6 +71,20 @@ export default function App() {
 
   const modalWorkspace =
     appState.workspaces.find((workspace) => workspace.id === ui.workspaceModal?.workspaceId) || null;
+
+  useEffect(() => {
+    const className = "app-shell-mode";
+
+    if (ui.view === "workspace") {
+      document.body.classList.add(className);
+      return () => {
+        document.body.classList.remove(className);
+      };
+    }
+
+    document.body.classList.remove(className);
+    return undefined;
+  }, [ui.view]);
 
   function handlePrimaryAction() {
     if (!appState.isAuthenticated) {

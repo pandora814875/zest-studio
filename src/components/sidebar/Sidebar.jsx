@@ -53,63 +53,87 @@ export function Sidebar({
           </label>
         </div>
 
-        {recentWorkspaces.length ? (
+        <div className="sidebar-scroll-area">
+          {recentWorkspaces.length ? (
+            <div className="sidebar-section">
+              <div className="sidebar-label">Recent</div>
+              <div className="recent-workspace-list">
+                {recentWorkspaces.map((workspace) => (
+                  <button
+                    className="recent-workspace-card"
+                    key={workspace.id}
+                    type="button"
+                    onClick={() => onSelectWorkspace(workspace.id)}
+                  >
+                    <strong>{workspace.name}</strong>
+                    <span>{workspace.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="sidebar-section">
-            <div className="sidebar-label">Recent</div>
-            <div className="recent-workspace-list">
-              {recentWorkspaces.map((workspace) => (
+            <div className="sidebar-label">Workspaces</div>
+            <div className="workspace-list">
+              {workspaces.map((workspace) => {
+                const active = workspace.id === activeWorkspaceId;
+                return (
+                  <div
+                    className={`workspace-item workspace-item-shell ${
+                      active ? "workspace-item-active" : ""
+                    }`}
+                    key={workspace.id}
+                  >
+                    <button
+                      className="workspace-item-main"
+                      type="button"
+                      onClick={() => onSelectWorkspace(workspace.id)}
+                    >
+                      <div className="workspace-item-copy">
+                        <strong>{workspace.name}</strong>
+                        <span>{workspace.description}</span>
+                      </div>
+                    </button>
+                    <div className="workspace-item-actions">
+                      <button
+                        className="workspace-item-icon"
+                        type="button"
+                        onClick={() => onRenameWorkspace(workspace)}
+                      >
+                        ✎
+                      </button>
+                      {workspaces.length > 1 ? (
+                        <button
+                          className="workspace-item-icon workspace-item-icon-danger"
+                          type="button"
+                          onClick={() => onDeleteWorkspace(workspace.id)}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-label">Open</div>
+            <div className="workspace-nav">
+              {QUICK_LINKS.map((link) => (
                 <button
-                  className="recent-workspace-card"
-                  key={workspace.id}
+                  className="workspace-nav-item"
+                  key={link.id}
                   type="button"
-                  onClick={() => onSelectWorkspace(workspace.id)}
+                  onClick={() => onOpenDrawer(link.id)}
                 >
-                  <strong>{workspace.name}</strong>
-                  <span>{workspace.description}</span>
+                  <strong>{link.label}</strong>
+                  <span>Open {link.label.toLowerCase()}</span>
                 </button>
               ))}
             </div>
-          </div>
-        ) : null}
-
-        <div className="sidebar-section">
-          <div className="sidebar-label">Workspaces</div>
-          <div className="workspace-list">
-            {workspaces.map((workspace) => {
-              const active = workspace.id === activeWorkspaceId;
-              return (
-                <div className={`workspace-item workspace-item-shell ${active ? "workspace-item-active" : ""}`} key={workspace.id}>
-                  <button className="workspace-item-main" type="button" onClick={() => onSelectWorkspace(workspace.id)}>
-                    <div className="workspace-item-copy">
-                      <strong>{workspace.name}</strong>
-                      <span>{workspace.description}</span>
-                    </div>
-                  </button>
-                  <div className="workspace-item-actions">
-                    <button className="workspace-item-icon" type="button" onClick={() => onRenameWorkspace(workspace)}>
-                      ✎
-                    </button>
-                    {workspaces.length > 1 ? (
-                      <button className="workspace-item-icon workspace-item-icon-danger" type="button" onClick={() => onDeleteWorkspace(workspace.id)}>
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="sidebar-section">
-          <div className="sidebar-label">Open</div>
-          <div className="workspace-nav">
-            {QUICK_LINKS.map((link) => (
-              <button className="workspace-nav-item" key={link.id} type="button" onClick={() => onOpenDrawer(link.id)}>
-                <strong>{link.label}</strong>
-                <span>Open {link.label.toLowerCase()}</span>
-              </button>
-            ))}
           </div>
         </div>
 
@@ -117,17 +141,33 @@ export function Sidebar({
           <div className="sidebar-label">Status</div>
           <div className="sidebar-card sidebar-status-card">
             <div className="status-line">
-              <span className={`status-dot ${activeWorkspace.studioStatus === "connected" ? "status-dot-live" : ""}`} />
-              <span>{activeWorkspace.studioStatus === "connected" ? "Studio connected" : "Studio waiting"}</span>
+              <span
+                className={`status-dot ${
+                  activeWorkspace.studioStatus === "connected" ? "status-dot-live" : ""
+                }`}
+              />
+              <span>
+                {activeWorkspace.studioStatus === "connected"
+                  ? "Studio connected"
+                  : "Studio waiting"}
+              </span>
             </div>
             <p className="sidebar-status-copy">
               Use the Studio drawer to pair, reconnect, or regenerate the code when you need it.
             </p>
             <div className="sidebar-inline-actions">
-              <button className="secondary-button sidebar-inline-button" type="button" onClick={() => onOpenDrawer("studio")}>
+              <button
+                className="secondary-button sidebar-inline-button"
+                type="button"
+                onClick={() => onOpenDrawer("studio")}
+              >
                 Open Studio
               </button>
-              <button className="secondary-button sidebar-inline-button" type="button" onClick={() => onCopyPairCode(activeWorkspace.pairCode)}>
+              <button
+                className="secondary-button sidebar-inline-button"
+                type="button"
+                onClick={() => onCopyPairCode(activeWorkspace.pairCode)}
+              >
                 Copy code
               </button>
             </div>
