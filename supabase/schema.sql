@@ -75,6 +75,23 @@ create table if not exists public.chat_messages (
   created_at timestamptz not null default now()
 );
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'chat_messages_suggested_actions_array_check'
+  ) then
+    alter table public.chat_messages
+      add constraint chat_messages_suggested_actions_array_check
+      check (
+        not (metadata ? 'suggested_actions')
+        or jsonb_typeof(metadata->'suggested_actions') = 'array'
+      );
+  end if;
+end
+$$;
+
 create table if not exists public.jobs (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,

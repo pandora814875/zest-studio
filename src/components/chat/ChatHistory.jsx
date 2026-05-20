@@ -15,7 +15,7 @@ function LoadingMessage() {
   );
 }
 
-export function ChatHistory({ messages }) {
+export function ChatHistory({ messages, isSubmitting = false, onSuggestedAction }) {
   return (
     <div className="message-list">
       {messages.map((message) => {
@@ -40,6 +40,11 @@ export function ChatHistory({ messages }) {
         const bullets = Array.isArray(message.bullets) ? message.bullets : [];
         const tags = Array.isArray(message.tags) ? message.tags : [];
         const codeBlocks = Array.isArray(message.codeBlocks) ? message.codeBlocks : [];
+        const suggestedActions = Array.isArray(message.suggestedActions)
+          ? message.suggestedActions
+          : Array.isArray(message.metadata?.suggested_actions)
+            ? message.metadata.suggested_actions
+            : [];
 
         return (
           <div className="message-row message-row-assistant" key={message.id}>
@@ -63,6 +68,21 @@ export function ChatHistory({ messages }) {
                     <span className="composer-pill" key={tag}>
                       {tag}
                     </span>
+                  ))}
+                </div>
+              ) : null}
+              {suggestedActions.length ? (
+                <div className="message-action-row">
+                  {suggestedActions.map((action) => (
+                    <button
+                      className="message-action-pill"
+                      key={`${message.id}-${action}`}
+                      type="button"
+                      onClick={() => onSuggestedAction?.(action)}
+                      disabled={isSubmitting}
+                    >
+                      {action}
+                    </button>
                   ))}
                 </div>
               ) : null}

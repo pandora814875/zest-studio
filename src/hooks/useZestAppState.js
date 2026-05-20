@@ -410,6 +410,10 @@ function mapAssistantMessage(row, jobsById) {
       linkedJob?.modelKey ? modelLabelFromKey(linkedJob.modelKey) : null,
     ].filter(Boolean),
     codeBlocks: buildCodeBlocksFromJob(linkedJob),
+    metadata,
+    suggestedActions: Array.isArray(metadata.suggested_actions)
+      ? metadata.suggested_actions.filter((action) => typeof action === "string" && action.trim())
+      : [],
     text: rawContent,
   };
 }

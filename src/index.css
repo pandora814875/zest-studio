@@ -2600,6 +2600,33 @@ summary::-webkit-details-marker { display: none; }
   gap: 8px;
 }
 
+.message-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.message-action-pill {
+  padding: 0.62rem 0.92rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: #222222;
+  color: var(--text);
+  text-align: left;
+  line-height: 1.4;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.message-action-pill:hover:not(:disabled) {
+  background: #292929;
+  border-color: rgba(199, 239, 93, 0.24);
+  transform: translateY(-1px);
+}
+
+.message-action-pill:disabled {
+  opacity: 0.6;
+}
+
 .message-bubble-loading {
   min-width: min(540px, 100%);
 }

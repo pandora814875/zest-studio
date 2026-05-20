@@ -40,6 +40,7 @@ export function WorkspaceShell({
   onSetStudioInstalled,
   onTogglePack,
   onUsePrompt,
+  onSendSuggestedAction,
   onSearchExplorer,
   onToggleExplorerNode,
   onPromptChange,
@@ -169,7 +170,11 @@ export function WorkspaceShell({
                         ))}
                       </div>
                     </div>
-                    <ChatHistory messages={messages} />
+                    <ChatHistory
+                      messages={messages}
+                      isSubmitting={ui.isSubmitting}
+                      onSuggestedAction={onSendSuggestedAction}
+                    />
                   </div>
                 </div>
                 <PromptComposer

@@ -157,6 +157,7 @@ export default function App() {
           onSetStudioInstalled={setStudioInstalled}
           onTogglePack={togglePack}
           onUsePrompt={usePromptSuggestion}
+          onSendSuggestedAction={sendPrompt}
           onSearchExplorer={setExplorerSearch}
           onToggleExplorerNode={toggleExplorerNode}
           onPromptChange={setPromptDraft}
