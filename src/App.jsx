@@ -5,6 +5,7 @@ import { useZestAppState } from "./hooks/useZestAppState";
 import { AuthModal } from "./components/modals/AuthModal";
 import { BillingModal } from "./components/modals/BillingModal";
 import { ConfirmModal } from "./components/modals/ConfirmModal";
+import { CreatePackModal } from "./components/modals/CreatePackModal";
 import { OnboardingModal } from "./components/modals/OnboardingModal";
 import { WorkspaceFormModal } from "./components/modals/WorkspaceFormModal";
 import { SettingsModal } from "./components/settings/SettingsModal";
@@ -31,9 +32,9 @@ export default function App() {
     activeWorkspace,
     activeWorkspaceMessages,
     activeWorkspaceJobs,
+    systemPacks,
     filteredWorkspaces,
     recentWorkspaces,
-    selectedCollection,
     workspaceExplorerTree,
     openAuthModal,
     closeAuthModal,
@@ -49,11 +50,12 @@ export default function App() {
     setPromptDraft,
     setModel,
     togglePack,
-    toggleCollection,
-    focusCollection,
     openWorkspaceModal,
     closeWorkspaceModal,
     submitWorkspaceForm,
+    openCreatePackModal,
+    closeCreatePackModal,
+    submitCreatePack,
     askDeleteWorkspace,
     closeDeleteWorkspace,
     deleteWorkspace,
@@ -133,7 +135,7 @@ export default function App() {
           jobs={activeWorkspaceJobs}
           filteredWorkspaces={filteredWorkspaces}
           recentWorkspaces={recentWorkspaces}
-          selectedCollection={selectedCollection}
+          systemPacks={systemPacks}
           explorerTree={workspaceExplorerTree}
           ui={ui}
           onHome={goHome}
@@ -146,14 +148,13 @@ export default function App() {
           onOpenDrawer={openDrawer}
           onCloseDrawer={closeDrawer}
           onOpenSettings={openSettings}
+          onOpenCreatePack={openCreatePackModal}
           onCopyPairCode={handleCopyPairCode}
           onCopyPluginPath={handleCopyPluginPath}
           onDownloadPlugin={downloadPluginFile}
           onRegeneratePairCode={regeneratePairCode}
           onReconnectStudio={reconnectStudio}
           onSetStudioInstalled={setStudioInstalled}
-          onToggleCollection={toggleCollection}
-          onSelectCollection={focusCollection}
           onTogglePack={togglePack}
           onUsePrompt={usePromptSuggestion}
           onSearchExplorer={setExplorerSearch}
@@ -182,9 +183,18 @@ export default function App() {
         open={Boolean(ui.workspaceModal)}
         mode={ui.workspaceModal?.mode}
         workspace={modalWorkspace}
+        packs={systemPacks}
         error={ui.workspaceModalError}
         onClose={closeWorkspaceModal}
         onSubmit={submitWorkspaceForm}
+      />
+
+      <CreatePackModal
+        open={ui.createPackModalOpen}
+        error={ui.createPackError}
+        isSubmitting={ui.isCreatingPack}
+        onClose={closeCreatePackModal}
+        onSubmit={submitCreatePack}
       />
 
       <ConfirmModal

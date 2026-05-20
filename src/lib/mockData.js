@@ -1,7 +1,4 @@
-import {
-  LOCAL_MODEL_CATALOG,
-  PACK_COLLECTIONS,
-} from "./constants";
+import { LOCAL_MODEL_CATALOG } from "./constants";
 import {
   buildWorkspaceFiles,
   createAssistantPayload,
@@ -29,7 +26,7 @@ function createWorkspaceBase(overrides = {}) {
     workspaceToken,
     accessMode: "guest",
     modelKey: LOCAL_MODEL_CATALOG[0].key,
-    selectedPackIds: ["inventory-ui", "economy-core"],
+    selectedPackIds: [],
     promptDraft: "",
     messages: [],
     jobs: [],
@@ -67,6 +64,7 @@ function createSampleWorkspace() {
     workspaceName: workspace.name,
     modelLabel: "Zest Starter",
     selectedPackIds: workspace.selectedPackIds,
+    systemPacks: [],
   });
   const job = createMockJob({
     prompt,
@@ -83,14 +81,13 @@ function createSampleWorkspace() {
 }
 
 function createStarterWorkspace() {
-  const selectedPackIds = PACK_COLLECTIONS[0].packIds.slice(0, 3);
   return {
     ...createWorkspaceBase({
       name: "Starter Workspace",
       description: "A focused Roblox workspace for build ideas, pair previews, and polished mock Studio history.",
-      selectedPackIds,
+      selectedPackIds: [],
     }),
-    explorerFiles: buildWorkspaceFiles(selectedPackIds, []),
+    explorerFiles: buildWorkspaceFiles([], []),
   };
 }
 
@@ -114,7 +111,7 @@ export function createWorkspaceFromInput(values = {}) {
     description:
       values.description?.trim() ||
       "A fresh Roblox workspace for structured prompts, mock Studio output, and reusable system packs.",
-    selectedPackIds: values.selectedPackIds || ["inventory-ui"],
+    selectedPackIds: values.selectedPackIds || [],
     modelKey: values.modelKey || LOCAL_MODEL_CATALOG[0].key,
   });
 

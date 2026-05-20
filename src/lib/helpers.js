@@ -1,8 +1,4 @@
-import {
-  MAX_PROMPT_LENGTH,
-  PACK_COLLECTIONS,
-  PACK_LIBRARY,
-} from "./constants";
+import { MAX_PROMPT_LENGTH, PACK_COLLECTIONS } from "./constants";
 
 const ROOT_ORDER = [
   "ServerScriptService",
@@ -11,41 +7,6 @@ const ROOT_ORDER = [
   "StarterPlayer",
   "Workspace",
 ];
-
-const PACK_FILE_MAP = {
-  "inventory-ui": [
-    "StarterGui/Inventory/InventoryScreen.client.lua",
-    "ReplicatedStorage/Inventory/InventoryConfig.lua",
-  ],
-  "economy-core": [
-    "ReplicatedStorage/Economy/EconomyConfig.lua",
-    "ServerScriptService/Economy/EconomyService.server.lua",
-  ],
-  "round-director": [
-    "ServerScriptService/RoundDirector/RoundDirector.server.lua",
-    "ReplicatedStorage/RoundDirector/RoundSignals.lua",
-  ],
-  "combat-kit": [
-    "ServerScriptService/Combat/CombatService.server.lua",
-    "ReplicatedStorage/Combat/Hitbox.shared.lua",
-  ],
-  "rng-cards": [
-    "StarterGui/RNG/RNGReveal.client.lua",
-    "ReplicatedStorage/RNG/RarityTable.lua",
-  ],
-  "datastore-safe": [
-    "ServerScriptService/Data/ProfileStore.server.lua",
-    "ReplicatedStorage/Data/ProfileSchema.lua",
-  ],
-  "monster-ai": [
-    "ServerScriptService/AI/MonsterBrain.server.lua",
-    "ReplicatedStorage/AI/MonsterConfig.lua",
-  ],
-  "housing-plots": [
-    "ServerScriptService/Plots/PlotService.server.lua",
-    "ReplicatedStorage/Plots/PlacementRules.lua",
-  ],
-};
 
 const FOCUS_TEMPLATES = [
   {
@@ -174,9 +135,72 @@ export function toTitleCase(value) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-export function detectPromptTemplate(prompt, selectedPackIds = []) {
+function slugifySegment(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function normalizeSystemPackFiles(files = [], fallbackName = "system-pack") {
+  if (!Array.isArray(files)) {
+    return [];
+  }
+
+  const fallbackSlug = slugifySegment(fallbackName) || "system-pack";
+
+  return files
+    .map((file, index) => {
+      if (typeof file === "string") {
+        const code = file.trim();
+
+        if (!code) {
+          return null;
+        }
+
+        return {
+          id: createId("pack-file"),
+          path: `ReplicatedStorage/Packs/${fallbackSlug}-${index + 1}.lua`,
+          language: "lua",
+          code,
+        };
+      }
+
+      if (!file || typeof file !== "object") {
+        return null;
+      }
+
+      const code = typeof file.code === "string" ? file.code.trim() : "";
+      if (!code) {
+        return null;
+      }
+
+      const path =
+        typeof file.path === "string" && file.path.trim()
+          ? file.path.trim()
+          : `ReplicatedStorage/Packs/${fallbackSlug}-${index + 1}.lua`;
+
+      return {
+        id:
+          typeof file.id === "string" && file.id.trim()
+            ? file.id.trim()
+            : createId("pack-file"),
+        path,
+        language:
+          typeof file.language === "string" && file.language.trim()
+            ? file.language.trim().toLowerCase()
+            : "lua",
+        code,
+      };
+    })
+    .filter(Boolean);
+}
+
+export function detectPromptTemplate(prompt, selectedPackIds = [], systemPacks = []) {
   const normalized = prompt.toLowerCase();
-  const packNames = PACK_LIBRARY.filter((pack) => selectedPackIds.includes(pack.id))
+  const packNames = systemPacks
+    .filter((pack) => selectedPackIds.includes(pack.id))
     .map((pack) => pack.name.toLowerCase())
     .join(" ");
 
@@ -187,8 +211,14 @@ export function detectPromptTemplate(prompt, selectedPackIds = []) {
   );
 }
 
-export function createAssistantPayload({ prompt, workspaceName, modelLabel, selectedPackIds }) {
-  const template = detectPromptTemplate(prompt, selectedPackIds);
+export function createAssistantPayload({
+  prompt,
+  workspaceName,
+  modelLabel,
+  selectedPackIds = [],
+  systemPacks = [],
+}) {
+  const template = detectPromptTemplate(prompt, selectedPackIds, systemPacks);
   const focusName = toTitleCase(template.title);
   const moduleName = toTitleCase(template.key).replace(/\s+/g, "");
   const promptComment = prompt.replace(/\s+/g, " ").trim();
@@ -253,11 +283,17 @@ export function createMockJob({ prompt, assistantMessage, modelKey }) {
   };
 }
 
-export function buildWorkspaceFiles(selectedPackIds = [], jobs = []) {
+export function buildWorkspaceFiles(selectedPackIds = [], jobs = [], systemPacks = []) {
   const fileSet = new Set();
+  const packMap = new Map(systemPacks.map((pack) => [pack.id, pack]));
 
   selectedPackIds.forEach((packId) => {
-    (PACK_FILE_MAP[packId] || []).forEach((filePath) => fileSet.add(filePath));
+    const pack = packMap.get(packId);
+    normalizeSystemPackFiles(pack?.files, pack?.name).forEach((file) => {
+      if (file.path) {
+        fileSet.add(file.path);
+      }
+    });
   });
 
   jobs.forEach((job) => {
@@ -341,16 +377,8 @@ function sortTreeChildren(children) {
     }));
 }
 
-export function getCollectionLoadedCount(collection, selectedPackIds = []) {
-  return collection.packIds.filter((packId) => selectedPackIds.includes(packId)).length;
-}
-
 export function getCollectionById(collectionId) {
   return PACK_COLLECTIONS.find((collection) => collection.id === collectionId) || PACK_COLLECTIONS[0];
-}
-
-export function getPackById(packId) {
-  return PACK_LIBRARY.find((pack) => pack.id === packId) || null;
 }
 
 export function getRecentWorkspaces(workspaces = [], activeWorkspaceId) {

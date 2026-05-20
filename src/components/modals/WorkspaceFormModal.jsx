@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { LOCAL_MODEL_CATALOG, PACK_LIBRARY } from "../../lib/constants";
+import { LOCAL_MODEL_CATALOG } from "../../lib/constants";
 import { ModalShell } from "./ModalShell";
 
-export function WorkspaceFormModal({ open, mode, workspace, error, onClose, onSubmit }) {
+export function WorkspaceFormModal({
+  open,
+  mode,
+  workspace,
+  packs = [],
+  error,
+  onClose,
+  onSubmit,
+}) {
   const initialState = useMemo(
     () => ({
       name: workspace?.name || "",
       description: workspace?.description || "",
       modelKey: workspace?.modelKey || LOCAL_MODEL_CATALOG[0].key,
-      selectedPackIds: workspace?.selectedPackIds || ["inventory-ui"],
+      selectedPackIds: workspace?.selectedPackIds || [],
     }),
     [workspace],
   );
@@ -42,11 +50,13 @@ export function WorkspaceFormModal({ open, mode, workspace, error, onClose, onSu
       <form className="dialog-form" onSubmit={handleSubmit}>
         <div className="dialog-head">
           <div>
-            <span className="sidebar-label">{mode === "rename" ? "Rename workspace" : "Create workspace"}</span>
+            <span className="sidebar-label">
+              {mode === "rename" ? "Rename workspace" : "Create workspace"}
+            </span>
             <h2>{mode === "rename" ? "Update workspace details" : "Create a new workspace"}</h2>
           </div>
           <button className="drawer-close-button" type="button" onClick={onClose}>
-            ×
+            x
           </button>
         </div>
 
@@ -79,7 +89,9 @@ export function WorkspaceFormModal({ open, mode, workspace, error, onClose, onSu
           <span>Default model</span>
           <select
             value={values.modelKey}
-            onChange={(event) => setValues((current) => ({ ...current, modelKey: event.target.value }))}
+            onChange={(event) =>
+              setValues((current) => ({ ...current, modelKey: event.target.value }))
+            }
           >
             {LOCAL_MODEL_CATALOG.map((model) => (
               <option key={model.key} value={model.key}>
@@ -91,21 +103,28 @@ export function WorkspaceFormModal({ open, mode, workspace, error, onClose, onSu
 
         <div className="field">
           <span>Starter packs</span>
-          <div className="workspace-pack-grid">
-            {PACK_LIBRARY.map((pack) => (
-              <button
-                className={`workspace-pack-toggle ${
-                  values.selectedPackIds.includes(pack.id) ? "workspace-pack-toggle-active" : ""
-                }`}
-                key={pack.id}
-                type="button"
-                onClick={() => togglePack(pack.id)}
-              >
-                <strong>{pack.name}</strong>
-                <span>{pack.description}</span>
-              </button>
-            ))}
-          </div>
+          {packs.length ? (
+            <div className="workspace-pack-grid">
+              {packs.map((pack) => (
+                <button
+                  className={`workspace-pack-toggle ${
+                    values.selectedPackIds.includes(pack.id) ? "workspace-pack-toggle-active" : ""
+                  }`}
+                  key={pack.id}
+                  type="button"
+                  onClick={() => togglePack(pack.id)}
+                >
+                  <strong>{pack.name}</strong>
+                  <span>{pack.description}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="notice">
+              Create a pack from the Systems drawer first, then come back here to preload it into a
+              workspace.
+            </div>
+          )}
         </div>
 
         <div className="dialog-actions">

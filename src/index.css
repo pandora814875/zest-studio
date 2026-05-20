@@ -1507,6 +1507,36 @@ summary::-webkit-details-marker { display: none; }
   gap: 16px;
 }
 
+.library-pack-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pack-empty-state {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px dashed var(--line-soft);
+  background: #131313;
+}
+
+.pack-empty-state strong {
+  font-size: 0.94rem;
+}
+
+.pack-empty-state p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.pack-empty-state-compact {
+  padding: 14px;
+}
+
 .suggestion-card-compact {
   font-size: 0.86rem;
 }
@@ -2763,6 +2793,17 @@ summary::-webkit-details-marker { display: none; }
   font-size: 0.8rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.pack-snippet-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.pack-snippet-note code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  color: var(--text);
 }
 
 .auth-preview-stack {

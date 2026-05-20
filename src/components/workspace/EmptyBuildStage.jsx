@@ -27,7 +27,7 @@ export function EmptyBuildStage({ onOpenCollection }) {
                   className="build-stage-chip"
                   key={collection.id}
                   type="button"
-                  onClick={() => onOpenCollection(collection.id)}
+                  onClick={onOpenCollection}
                 >
                   {collection.name}
                 </button>

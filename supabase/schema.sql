@@ -23,6 +23,17 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.system_packs (
+  id uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text not null default '',
+  files jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint system_packs_files_array check (jsonb_typeof(files) = 'array')
+);
+
 alter table public.workspaces
   add column if not exists token_value text unique,
   add column if not exists owner_user_id uuid references auth.users(id) on delete cascade,
@@ -144,6 +155,9 @@ create index if not exists idx_workspaces_owner_created_at
 create index if not exists idx_jobs_workspace_created_at
   on public.jobs(workspace_id, created_at desc);
 
+create index if not exists idx_system_packs_owner_updated_at
+  on public.system_packs(owner_user_id, updated_at desc);
+
 create index if not exists idx_jobs_workspace_status_created_at
   on public.jobs(workspace_id, status, created_at asc);
 
@@ -175,6 +189,12 @@ execute function public.set_updated_at();
 drop trigger if exists trg_profiles_set_updated_at on public.profiles;
 create trigger trg_profiles_set_updated_at
 before update on public.profiles
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists trg_system_packs_set_updated_at on public.system_packs;
+create trigger trg_system_packs_set_updated_at
+before update on public.system_packs
 for each row
 execute function public.set_updated_at();
 
@@ -307,6 +327,7 @@ $$;
 
 alter table public.workspaces enable row level security;
 alter table public.profiles enable row level security;
+alter table public.system_packs enable row level security;
 alter table public.chat_messages enable row level security;
 alter table public.jobs enable row level security;
 alter table public.workspace_wallets enable row level security;
@@ -328,6 +349,35 @@ for update
 to authenticated
 using (auth.uid() = id)
 with check (auth.uid() = id);
+
+drop policy if exists "System packs read own rows" on public.system_packs;
+create policy "System packs read own rows"
+on public.system_packs
+for select
+to authenticated
+using (auth.uid() = owner_user_id);
+
+drop policy if exists "System packs insert own rows" on public.system_packs;
+create policy "System packs insert own rows"
+on public.system_packs
+for insert
+to authenticated
+with check (auth.uid() = owner_user_id);
+
+drop policy if exists "System packs update own rows" on public.system_packs;
+create policy "System packs update own rows"
+on public.system_packs
+for update
+to authenticated
+using (auth.uid() = owner_user_id)
+with check (auth.uid() = owner_user_id);
+
+drop policy if exists "System packs delete own rows" on public.system_packs;
+create policy "System packs delete own rows"
+on public.system_packs
+for delete
+to authenticated
+using (auth.uid() = owner_user_id);
 
 drop policy if exists "Workspaces read own rows" on public.workspaces;
 create policy "Workspaces read own rows"

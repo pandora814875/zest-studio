@@ -3,8 +3,6 @@ import {
   LOCAL_MODEL_CATALOG,
   MAX_PROMPT_LENGTH,
   MAX_RECENT_WORKSPACES,
-  PACK_COLLECTIONS,
-  PACK_LIBRARY,
 } from "../lib/constants";
 import {
   buildExplorerTree,
@@ -13,9 +11,9 @@ import {
   createUserMessage,
   createWorkspaceToken,
   filterExplorerNodes,
-  getCollectionById,
   getRecentWorkspaces,
   matchesSearch,
+  normalizeSystemPackFiles,
   pairCodeFromWorkspaceToken,
   trimPrompt,
 } from "../lib/helpers";
@@ -46,6 +44,16 @@ const WORKSPACE_SELECT = [
   "studio_authorized_at",
 ].join(", ");
 
+const SYSTEM_PACK_SELECT = [
+  "id",
+  "owner_user_id",
+  "name",
+  "description",
+  "files",
+  "created_at",
+  "updated_at",
+].join(", ");
+
 const DEFAULT_UI = {
   view: "home",
   activeDrawer: null,
@@ -56,9 +64,11 @@ const DEFAULT_UI = {
   onboardingOpen: false,
   settingsOpen: false,
   settingsSection: "models",
-  collectionId: PACK_COLLECTIONS[0].id,
   workspaceModal: null,
   workspaceModalError: "",
+  createPackModalOpen: false,
+  createPackError: "",
+  isCreatingPack: false,
   deleteWorkspaceId: null,
   deleteWorkspaceError: "",
   mobileSidebarOpen: false,
@@ -113,11 +123,12 @@ async function sha256Hex(value) {
     .join("");
 }
 
-function buildSelectedPackPayload(selectedPackIds = []) {
+function buildSelectedPackPayload(selectedPackIds = [], systemPacks = []) {
+  const packMap = new Map(systemPacks.map((pack) => [pack.id, pack]));
+
   return selectedPackIds
     .map((packId) => {
-      const pack = PACK_LIBRARY.find((item) => item.id === packId);
-      const collection = PACK_COLLECTIONS.find((item) => item.packIds.includes(packId));
+      const pack = packMap.get(packId);
 
       if (!pack) {
         return null;
@@ -127,17 +138,35 @@ function buildSelectedPackPayload(selectedPackIds = []) {
         id: pack.id,
         name: pack.name,
         blurb: pack.description,
-        systems: collection?.name || "",
+        systems: `${pack.files.length} file${pack.files.length === 1 ? "" : "s"}`,
+        files: pack.files.map((file) => ({
+          path: file.path,
+          language: file.language || "lua",
+        })),
       };
     })
     .filter(Boolean);
 }
 
-function normalizeWorkspace(workspace = {}) {
+function mapSystemPackRow(row = {}) {
+  const files = normalizeSystemPackFiles(row.files, row.name);
+
+  return {
+    id: row.id,
+    ownerUserId: row.owner_user_id || null,
+    name: row.name || "Untitled pack",
+    description: row.description || "",
+    files,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+  };
+}
+
+function normalizeWorkspace(workspace = {}, systemPacks = []) {
   const workspaceToken = workspace.workspaceToken || createWorkspaceToken();
   const selectedPackIds = Array.isArray(workspace.selectedPackIds)
     ? workspace.selectedPackIds.filter(Boolean)
-    : ["inventory-ui"];
+    : [];
   const jobs = Array.isArray(workspace.jobs) ? workspace.jobs : [];
   const pluginOnline = Boolean(workspace.pluginOnline);
   const pluginInstalled =
@@ -177,7 +206,7 @@ function normalizeWorkspace(workspace = {}) {
     explorerFiles:
       Array.isArray(workspace.explorerFiles) && workspace.explorerFiles.length
         ? workspace.explorerFiles
-        : buildWorkspaceFiles(selectedPackIds, jobs),
+        : buildWorkspaceFiles(selectedPackIds, jobs, systemPacks),
     explorerExpandedIds:
       Array.isArray(workspace.explorerExpandedIds) && workspace.explorerExpandedIds.length
         ? workspace.explorerExpandedIds
@@ -189,14 +218,14 @@ function normalizeWorkspace(workspace = {}) {
   };
 }
 
-function createPlaceholderWorkspace(overrides = {}) {
+function createPlaceholderWorkspace(overrides = {}, systemPacks = []) {
   return normalizeWorkspace({
     ...createWorkspaceFromInput({
       name: overrides.name || "Starter Workspace",
       description:
         overrides.description ||
         "Create a workspace to start building in Roblox Studio and unlock live history, Explorer, and billing flows.",
-      selectedPackIds: overrides.selectedPackIds || ["inventory-ui", "economy-core"],
+      selectedPackIds: overrides.selectedPackIds || [],
       modelKey: overrides.modelKey || LOCAL_MODEL_CATALOG[0].key,
     }),
     accessMode: "owned",
@@ -207,7 +236,7 @@ function createPlaceholderWorkspace(overrides = {}) {
     pluginOnline: false,
     syncPulse: false,
     ...overrides,
-  });
+  }, systemPacks);
 }
 
 function createInitialAppState() {
@@ -218,6 +247,7 @@ function createInitialAppState() {
     hasCompletedOnboarding: false,
     onboardingChoice: "",
     authProfile: EMPTY_AUTH_PROFILE,
+    systemPacks: [],
     workspaces: [starterWorkspace],
     activeWorkspaceId: starterWorkspace.id,
   };
@@ -268,12 +298,12 @@ function getSessionProfile(session) {
   };
 }
 
-function mapWorkspaceRow(row = {}) {
+function mapWorkspaceRow(row = {}, systemPacks = []) {
   const selectedPackIds = Array.isArray(row.selected_packs)
     ? row.selected_packs
     : Array.isArray(row.selectedPacks)
       ? row.selectedPacks
-      : ["inventory-ui"];
+      : [];
   const pluginOnline = isPluginOnline(row.last_seen_at);
 
   return normalizeWorkspace({
@@ -303,7 +333,7 @@ function mapWorkspaceRow(row = {}) {
     studioUsername: row.studio_username || "",
     studioDisplayName: row.studio_display_name || "",
     studioAuthorizedAt: row.studio_authorized_at || "",
-  });
+  }, systemPacks);
 }
 
 function mapJobOperation(operation, index, jobId) {
@@ -397,7 +427,7 @@ function mapMessageRow(row, jobsById) {
   return mapAssistantMessage(row, jobsById);
 }
 
-function mergeWorkspaceState(currentWorkspace, snapshot) {
+function mergeWorkspaceState(currentWorkspace, snapshot, systemPacks = []) {
   const mappedJobs = Array.isArray(snapshot.jobs) ? snapshot.jobs.map(mapJobRow) : [];
   const jobsById = new Map(mappedJobs.map((job) => [job.id, job]));
   const mappedMessages = Array.isArray(snapshot.messages)
@@ -432,14 +462,14 @@ function mergeWorkspaceState(currentWorkspace, snapshot) {
     syncPulse: pluginOnline,
     studioStatus: pluginOnline ? "connected" : pluginInstalled ? "pairing" : "waiting",
     lastSyncedAt: snapshot.workspace?.last_seen_at || currentWorkspace.lastSyncedAt || "",
-    explorerFiles: buildWorkspaceFiles(selectedPackIds, mappedJobs),
+    explorerFiles: buildWorkspaceFiles(selectedPackIds, mappedJobs, systemPacks),
     billingStatus:
       snapshot.project?.billingStatus || currentWorkspace.billingStatus || "free",
     studioUserId: project.studioUserId || null,
     studioUsername: project.studioUsername || "",
     studioDisplayName: project.studioDisplayName || "",
     studioAuthorizedAt: project.studioAuthorizedAt || "",
-  });
+  }, systemPacks);
 }
 
 async function parseEdgeResponse(response) {
@@ -488,6 +518,8 @@ export function useZestAppState() {
     [appState.workspaces, ui.workspaceSearch],
   );
 
+  const systemPacks = appState.systemPacks;
+
   const recentWorkspaces = useMemo(
     () =>
       getRecentWorkspaces(appState.workspaces, activeWorkspace?.id).slice(
@@ -496,8 +528,6 @@ export function useZestAppState() {
       ),
     [appState.workspaces, activeWorkspace?.id],
   );
-
-  const activeCollection = useMemo(() => getCollectionById(ui.collectionId), [ui.collectionId]);
 
   const workspaceExplorerTree = useMemo(
     () =>
@@ -524,11 +554,13 @@ export function useZestAppState() {
     }, 1800);
   }
 
-  function updateWorkspace(workspaceId, updater) {
+  function updateWorkspace(workspaceId, updater, systemPackSource = appStateRef.current.systemPacks) {
     setAppState((current) => ({
       ...current,
       workspaces: current.workspaces.map((workspace) =>
-        workspace.id === workspaceId ? normalizeWorkspace(updater(workspace)) : workspace,
+        workspace.id === workspaceId
+          ? normalizeWorkspace(updater(workspace), systemPackSource)
+          : workspace,
       ),
     }));
   }
@@ -549,12 +581,50 @@ export function useZestAppState() {
       hasCompletedOnboarding: false,
       onboardingChoice: "",
       authProfile: EMPTY_AUTH_PROFILE,
+      systemPacks: [],
       workspaces: [placeholder],
       activeWorkspaceId: placeholder.id,
     });
   }
 
-  async function loadOwnedWorkspaces(activeWorkspaceIdHint) {
+  async function loadSystemPacks() {
+    const client = requireSupabase();
+    const currentSession = sessionRef.current;
+
+    if (!currentSession?.user) {
+      setAppState((current) => ({ ...current, systemPacks: [] }));
+      return [];
+    }
+
+    const { data, error } = await client
+      .from("system_packs")
+      .select(SYSTEM_PACK_SELECT)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const mapped = (data || []).map(mapSystemPackRow);
+
+    setAppState((current) => ({
+      ...current,
+      systemPacks: mapped,
+      workspaces: current.workspaces.map((workspace) =>
+        normalizeWorkspace(
+          {
+            ...workspace,
+            explorerFiles: buildWorkspaceFiles(workspace.selectedPackIds, workspace.jobs, mapped),
+          },
+          mapped,
+        ),
+      ),
+    }));
+
+    return mapped;
+  }
+
+  async function loadOwnedWorkspaces(activeWorkspaceIdHint, systemPackSource = appStateRef.current.systemPacks) {
     const client = requireSupabase();
     const currentSession = sessionRef.current;
 
@@ -575,13 +645,13 @@ export function useZestAppState() {
 
     const mapped =
       data?.length
-        ? data.map(mapWorkspaceRow)
+        ? data.map((row) => mapWorkspaceRow(row, systemPackSource))
         : [
             createPlaceholderWorkspace({
               name: "Create your first workspace",
               description:
                 "You do not have any saved workspaces yet. Use New Workspace to create one in Supabase.",
-            }),
+            }, systemPackSource),
           ];
     const preferredActiveId = activeWorkspaceIdHint || appStateRef.current.activeWorkspaceId;
     const nextActiveId = mapped.some((workspace) => workspace.id === preferredActiveId)
@@ -592,6 +662,7 @@ export function useZestAppState() {
       ...current,
       isAuthenticated: true,
       authProfile: getSessionProfile(currentSession),
+      systemPacks: systemPackSource,
       workspaces: mapped,
       activeWorkspaceId: nextActiveId,
     }));
@@ -629,7 +700,9 @@ export function useZestAppState() {
     }
 
     const snapshot = await requestWorkspaceState(workspace, options);
-    updateWorkspace(workspaceId, (current) => mergeWorkspaceState(current, snapshot));
+    updateWorkspace(workspaceId, (current) =>
+      mergeWorkspaceState(current, snapshot, appStateRef.current.systemPacks),
+    );
     return snapshot;
   }
 
@@ -695,6 +768,7 @@ export function useZestAppState() {
           activeDrawer: null,
           view: "home",
           workspaceModalError: "",
+          createPackError: "",
           deleteWorkspaceError: "",
         }));
       });
@@ -733,7 +807,8 @@ export function useZestAppState() {
       }));
 
       try {
-        await loadOwnedWorkspaces();
+        const packs = await loadSystemPacks();
+        await loadOwnedWorkspaces(undefined, packs);
       } catch (error) {
         if (!cancelled) {
           setUi((current) => ({
@@ -836,6 +911,9 @@ export function useZestAppState() {
       settingsOpen: false,
       authError: "",
       workspaceModalError: "",
+      createPackModalOpen: false,
+      createPackError: "",
+      isCreatingPack: false,
       deleteWorkspaceError: "",
     }));
   }
@@ -892,31 +970,101 @@ export function useZestAppState() {
 
     patchActiveWorkspace({
       selectedPackIds,
-      explorerFiles: buildWorkspaceFiles(selectedPackIds, activeWorkspace.jobs),
+      explorerFiles: buildWorkspaceFiles(
+        selectedPackIds,
+        activeWorkspace.jobs,
+        appStateRef.current.systemPacks,
+      ),
     });
   }
 
-  function toggleCollection(collectionId) {
-    const collection = getCollectionById(collectionId);
-    const everyLoaded = collection.packIds.every((packId) =>
-      activeWorkspace.selectedPackIds.includes(packId),
-    );
-
-    const selectedPackIds = everyLoaded
-      ? activeWorkspace.selectedPackIds.filter(
-          (packId) => !collection.packIds.includes(packId),
-        )
-      : Array.from(new Set([...activeWorkspace.selectedPackIds, ...collection.packIds]));
-
-    patchActiveWorkspace({
-      selectedPackIds,
-      explorerFiles: buildWorkspaceFiles(selectedPackIds, activeWorkspace.jobs),
-    });
-    setUi((current) => ({ ...current, collectionId }));
+  function openCreatePackModal() {
+    setUi((current) => ({
+      ...current,
+      createPackModalOpen: true,
+      createPackError: "",
+    }));
   }
 
-  function focusCollection(collectionId) {
-    setUi((current) => ({ ...current, collectionId, activeDrawer: "library" }));
+  function closeCreatePackModal() {
+    setUi((current) => ({
+      ...current,
+      createPackModalOpen: false,
+      createPackError: "",
+      isCreatingPack: false,
+    }));
+  }
+
+  async function submitCreatePack(values) {
+    setUi((current) => ({
+      ...current,
+      createPackError: "",
+      isCreatingPack: true,
+    }));
+
+    try {
+      const client = requireSupabase();
+      const userId = sessionRef.current?.user?.id;
+
+      if (!userId) {
+        throw new Error("Sign in with Roblox before creating packs.");
+      }
+
+      const files = normalizeSystemPackFiles(values.files, values.name);
+      if (!files.length) {
+        throw new Error("Paste at least one Lua snippet before saving this pack.");
+      }
+
+      const { data, error } = await client
+        .from("system_packs")
+        .insert({
+          owner_user_id: userId,
+          name: values.name.trim(),
+          description: values.description.trim(),
+          files,
+        })
+        .select(SYSTEM_PACK_SELECT)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const createdPack = mapSystemPackRow(data);
+      const nextPacks = [createdPack, ...appStateRef.current.systemPacks];
+
+      setAppState((current) => ({
+        ...current,
+        systemPacks: nextPacks,
+        workspaces: current.workspaces.map((workspace) =>
+          normalizeWorkspace(
+            {
+              ...workspace,
+              explorerFiles: buildWorkspaceFiles(
+                workspace.selectedPackIds,
+                workspace.jobs,
+                nextPacks,
+              ),
+            },
+            nextPacks,
+          ),
+        ),
+      }));
+
+      setUi((current) => ({
+        ...current,
+        createPackModalOpen: false,
+        createPackError: "",
+        isCreatingPack: false,
+        activeDrawer: "library",
+      }));
+    } catch (error) {
+      setUi((current) => ({
+        ...current,
+        createPackError: error instanceof Error ? error.message : "Unable to save this pack.",
+        isCreatingPack: false,
+      }));
+    }
   }
 
   function openWorkspaceModal(mode, workspace = null) {
@@ -1049,9 +1197,10 @@ export function useZestAppState() {
 
     try {
       if (!workspace?.persisted) {
-        const placeholder = createPlaceholderWorkspace();
+        const placeholder = createPlaceholderWorkspace({}, appStateRef.current.systemPacks);
         setAppState((current) => ({
           ...current,
+          systemPacks: current.systemPacks,
           workspaces: [placeholder],
           activeWorkspaceId: placeholder.id,
         }));
@@ -1220,11 +1369,19 @@ export function useZestAppState() {
 
       const ensuredWorkspace = await requestWorkspaceState(workspaceSnapshot, { ensure: true });
 
-      updateWorkspace(activeWorkspace.id, (workspace) => ({
-        ...mergeWorkspaceState(workspace, ensuredWorkspace),
-        messages: workspace.messages,
-        promptDraft: "",
-      }));
+      updateWorkspace(
+        activeWorkspace.id,
+        (workspace) => ({
+          ...mergeWorkspaceState(
+            workspace,
+            ensuredWorkspace,
+            appStateRef.current.systemPacks,
+          ),
+          messages: workspace.messages,
+          promptDraft: "",
+        }),
+        appStateRef.current.systemPacks,
+      );
 
       const latestWorkspace =
         appStateRef.current.workspaces.find((workspace) => workspace.id === activeWorkspace.id) ||
@@ -1238,13 +1395,16 @@ export function useZestAppState() {
           prompt,
           modelKey: latestWorkspace.modelKey,
           projectDescription: latestWorkspace.description,
-          selectedPacks: buildSelectedPackPayload(latestWorkspace.selectedPackIds),
+          selectedPacks: buildSelectedPackPayload(
+            latestWorkspace.selectedPackIds,
+            appStateRef.current.systemPacks,
+          ),
         }),
       });
       const result = await parseEdgeResponse(response);
 
       updateWorkspace(activeWorkspace.id, (workspace) =>
-        mergeWorkspaceState(workspace, result.workspace),
+        mergeWorkspaceState(workspace, result.workspace, appStateRef.current.systemPacks),
       );
       setUi((current) => ({
         ...current,
@@ -1301,7 +1461,7 @@ export function useZestAppState() {
         }
 
         updateWorkspace(activeWorkspace.id, (workspace) =>
-          mergeWorkspaceState(workspace, snapshot),
+          mergeWorkspaceState(workspace, snapshot, appStateRef.current.systemPacks),
         );
       } catch {
         if (cancelled) {
@@ -1336,7 +1496,6 @@ export function useZestAppState() {
 
   const activeWorkspaceMessages = activeWorkspace?.messages || [];
   const activeWorkspaceJobs = activeWorkspace?.jobs || [];
-  const selectedCollection = getCollectionById(activeCollection.id);
 
   return {
     appState,
@@ -1344,10 +1503,10 @@ export function useZestAppState() {
     activeWorkspace,
     activeWorkspaceMessages,
     activeWorkspaceJobs,
+    systemPacks,
     filteredWorkspaces,
     recentWorkspaces,
     selectedModel,
-    selectedCollection,
     workspaceExplorerTree,
     openAuthModal,
     closeAuthModal,
@@ -1363,11 +1522,12 @@ export function useZestAppState() {
     setPromptDraft,
     setModel,
     togglePack,
-    toggleCollection,
-    focusCollection,
     openWorkspaceModal,
     closeWorkspaceModal,
     submitWorkspaceForm,
+    openCreatePackModal,
+    closeCreatePackModal,
+    submitCreatePack,
     askDeleteWorkspace,
     closeDeleteWorkspace,
     deleteWorkspace,

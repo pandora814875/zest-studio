@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { LOCAL_MODEL_CATALOG, PACK_COLLECTIONS, WORKSPACE_DRAWERS } from "../../lib/constants";
+import { useEffect, useMemo, useRef } from "react";
+import { LOCAL_MODEL_CATALOG, WORKSPACE_DRAWERS } from "../../lib/constants";
 import { ChatHistory } from "../chat/ChatHistory";
 import { ExplorerPanel } from "../explorer/ExplorerPanel";
 import { PromptComposer } from "../prompt/PromptComposer";
@@ -18,7 +18,7 @@ export function WorkspaceShell({
   jobs,
   filteredWorkspaces,
   recentWorkspaces,
-  selectedCollection,
+  systemPacks,
   explorerTree,
   ui,
   onHome,
@@ -31,14 +31,13 @@ export function WorkspaceShell({
   onOpenDrawer,
   onCloseDrawer,
   onOpenSettings,
+  onOpenCreatePack,
   onCopyPairCode,
   onCopyPluginPath,
   onDownloadPlugin,
   onRegeneratePairCode,
   onReconnectStudio,
   onSetStudioInstalled,
-  onToggleCollection,
-  onSelectCollection,
   onTogglePack,
   onUsePrompt,
   onSearchExplorer,
@@ -59,6 +58,12 @@ export function WorkspaceShell({
       : activeWorkspace.studioStatus === "syncing"
         ? "Syncing"
         : "Studio waiting";
+
+  const loadedPacks = useMemo(
+    () =>
+      systemPacks.filter((pack) => activeWorkspace.selectedPackIds.includes(pack.id)).slice(0, 3),
+    [activeWorkspace.selectedPackIds, systemPacks],
+  );
 
   useEffect(() => {
     const container = threadScrollRef.current;
@@ -152,22 +157,16 @@ export function WorkspaceShell({
                     <div className="thread-topbar">
                       <span className="chat-empty-logo thread-logo">Zest</span>
                       <div className="thread-topbar-pills">
-                        {PACK_COLLECTIONS.filter((collection) =>
-                          collection.packIds.some((packId) =>
-                            activeWorkspace.selectedPackIds.includes(packId),
-                          ),
-                        )
-                          .slice(0, 3)
-                          .map((collection) => (
-                            <button
-                              className="thread-pack-pill"
-                              key={collection.id}
-                              type="button"
-                              onClick={() => onOpenDrawer("library")}
-                            >
-                              {collection.name}
-                            </button>
-                          ))}
+                        {loadedPacks.map((pack) => (
+                          <button
+                            className="thread-pack-pill"
+                            key={pack.id}
+                            type="button"
+                            onClick={() => onOpenDrawer("library")}
+                          >
+                            {pack.name}
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <ChatHistory messages={messages} />
@@ -213,9 +212,8 @@ export function WorkspaceShell({
           {ui.activeDrawer === "library" ? (
             <LibraryPanel
               activeWorkspace={activeWorkspace}
-              selectedCollection={selectedCollection}
-              onSelectCollection={onSelectCollection}
-              onToggleCollection={onToggleCollection}
+              packs={systemPacks}
+              onOpenCreatePack={onOpenCreatePack}
               onTogglePack={onTogglePack}
               onUsePrompt={onUsePrompt}
             />

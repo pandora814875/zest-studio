@@ -72,49 +72,6 @@ export const LOCAL_MODEL_CATALOG = [
   },
 ];
 
-export const PACK_LIBRARY = [
-  {
-    id: "inventory-ui",
-    name: "Inventory UI",
-    description: "Slots, inspect cards, rarity borders, equip states, and hotbar structure.",
-  },
-  {
-    id: "economy-core",
-    name: "Economy Core",
-    description: "Coins, shop rows, bundles, purchase states, and reward pacing.",
-  },
-  {
-    id: "round-director",
-    name: "Round Director",
-    description: "Lobby timers, intermission loops, teleports, and round flow.",
-  },
-  {
-    id: "combat-kit",
-    name: "Combat Kit",
-    description: "Hitboxes, cooldowns, remotes, combo flow, and impact feedback.",
-  },
-  {
-    id: "rng-cards",
-    name: "RNG Cards",
-    description: "Weighted rarity rolls, pity logic, reveal cards, and collection loops.",
-  },
-  {
-    id: "datastore-safe",
-    name: "Save Layer",
-    description: "Profile schemas, retry-safe saves, rollback-friendly structure, and sessions.",
-  },
-  {
-    id: "monster-ai",
-    name: "Monster AI",
-    description: "Simple pursuit, attack loops, aggro checks, and enemy logic.",
-  },
-  {
-    id: "housing-plots",
-    name: "Plot Builder",
-    description: "Claimable plots, placement validation, permissions, and ownership loops.",
-  },
-];
-
 export const PACK_COLLECTIONS = [
   {
     id: "inventory-suite",
