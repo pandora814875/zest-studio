@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LOCAL_MODEL_CATALOG, PACK_LIBRARY } from "../../lib/constants";
 import { ModalShell } from "./ModalShell";
 
-export function WorkspaceFormModal({ open, mode, workspace, onClose, onSubmit }) {
+export function WorkspaceFormModal({ open, mode, workspace, error, onClose, onSubmit }) {
   const initialState = useMemo(
     () => ({
       name: workspace?.name || "",
@@ -49,6 +49,8 @@ export function WorkspaceFormModal({ open, mode, workspace, onClose, onSubmit })
             ×
           </button>
         </div>
+
+        {error ? <div className="notice notice-error">{error}</div> : null}
 
         <label className="field">
           <span>Name</span>

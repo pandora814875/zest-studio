@@ -9,6 +9,7 @@ export function SettingsModal({
   onClose,
   onSectionChange,
   onSaveWorkspace,
+  onOpenBilling,
   onCopyPluginPath,
   onSignOut,
 }) {
@@ -42,6 +43,10 @@ export function SettingsModal({
           <div className="settings-detail-card">
             <strong>Loaded packs</strong>
             <span>{workspace.selectedPackIds.length} active systems</span>
+          </div>
+          <div className="settings-detail-card">
+            <strong>Plan state</strong>
+            <span>{workspace.billingStatus || "free"}</span>
           </div>
         </div>
       </div>
@@ -77,6 +82,13 @@ export function SettingsModal({
           <div className="settings-detail-card">
             <strong>Mode</strong>
             <span>{account.role}</span>
+          </div>
+          <div className="settings-detail-card">
+            <strong>Billing</strong>
+            <span>Upgrade this workspace to Pro or Studio.</span>
+            <button className="primary-button" type="button" onClick={onOpenBilling}>
+              Open billing
+            </button>
           </div>
         </div>
         <button className="secondary-button" type="button" onClick={onSignOut}>

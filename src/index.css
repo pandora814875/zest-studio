@@ -3046,6 +3046,93 @@ summary::-webkit-details-marker { display: none; }
   line-height: 1.55;
 }
 
+.billing-modal-card {
+  width: min(920px, 100%);
+  padding: 0;
+}
+
+.billing-modal-shell {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.billing-modal-head {
+  align-items: start;
+}
+
+.billing-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.billing-plan-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #151515 0%, #111111 100%);
+}
+
+.billing-plan-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.billing-plan-eyebrow {
+  color: #d9f892;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.billing-plan-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.billing-plan-price-row strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.billing-plan-price-row span,
+.billing-plan-copy p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.billing-plan-features {
+  display: grid;
+  gap: 10px;
+}
+
+.billing-plan-feature {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.billing-plan-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+  background: #c7ef5d;
+  box-shadow: 0 0 0 4px rgba(199, 239, 93, 0.1);
+}
+
+.billing-plan-button {
+  width: 100%;
+  justify-content: center;
+}
+
 .workspace-skeleton {
   display: grid;
   gap: 18px;
@@ -3102,7 +3189,8 @@ summary::-webkit-details-marker { display: none; }
   .studio-pair-grid,
   .studio-toggle-row,
   .settings-detail-grid,
-  .workspace-pack-grid {
+  .workspace-pack-grid,
+  .billing-plan-grid {
     grid-template-columns: 1fr;
   }
 }

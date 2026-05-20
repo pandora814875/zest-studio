@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import pluginSource from "../plugin/robolua-plugin.lua?raw";
 import { PLUGIN_FOLDER_HINT } from "./lib/constants";
 import { useZestAppState } from "./hooks/useZestAppState";
 import { AuthModal } from "./components/modals/AuthModal";
+import { BillingModal } from "./components/modals/BillingModal";
 import { ConfirmModal } from "./components/modals/ConfirmModal";
 import { OnboardingModal } from "./components/modals/OnboardingModal";
 import { WorkspaceFormModal } from "./components/modals/WorkspaceFormModal";
@@ -23,6 +24,7 @@ function downloadPluginFile() {
 }
 
 export default function App() {
+  const [billingOpen, setBillingOpen] = useState(false);
   const {
     appState,
     ui,
@@ -180,6 +182,7 @@ export default function App() {
         open={Boolean(ui.workspaceModal)}
         mode={ui.workspaceModal?.mode}
         workspace={modalWorkspace}
+        error={ui.workspaceModalError}
         onClose={closeWorkspaceModal}
         onSubmit={submitWorkspaceForm}
       />
@@ -187,7 +190,8 @@ export default function App() {
       <ConfirmModal
         open={Boolean(ui.deleteWorkspaceId)}
         title="Delete workspace?"
-        body="This removes the local mock workspace, recent history, and pairing preview state from the browser."
+        body="This permanently removes the workspace row from Supabase along with its related history."
+        error={ui.deleteWorkspaceError}
         onCancel={closeDeleteWorkspace}
         onConfirm={deleteWorkspace}
         confirmLabel="Delete workspace"
@@ -200,8 +204,15 @@ export default function App() {
         account={appState.authProfile}
         onClose={closeSettings}
         onSectionChange={(section) => setUi((current) => ({ ...current, settingsSection: section }))}
+        onOpenBilling={() => setBillingOpen(true)}
         onCopyPluginPath={handleCopyPluginPath}
         onSignOut={signOut}
+      />
+
+      <BillingModal
+        open={billingOpen}
+        onClose={() => setBillingOpen(false)}
+        workspace={activeWorkspace}
       />
     </>
   );

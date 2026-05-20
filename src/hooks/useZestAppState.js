@@ -5,7 +5,6 @@ import {
   MAX_RECENT_WORKSPACES,
   PACK_COLLECTIONS,
   PACK_LIBRARY,
-  STORAGE_KEY,
 } from "../lib/constants";
 import {
   buildExplorerTree,
@@ -20,7 +19,7 @@ import {
   pairCodeFromWorkspaceToken,
   trimPrompt,
 } from "../lib/helpers";
-import { createDefaultAppState, createWorkspaceFromInput } from "../lib/mockData";
+import { createWorkspaceFromInput } from "../lib/mockData";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, requireSupabase } from "../lib/supabaseClient";
 
 const DEFAULT_EXPANDED_IDS = ["ServerScriptService", "StarterGui", "ReplicatedStorage"];
@@ -29,6 +28,23 @@ const EMPTY_AUTH_PROFILE = {
   username: "",
   role: "Roblox account",
 };
+
+const WORKSPACE_SELECT = [
+  "id",
+  "token_value",
+  "display_name",
+  "description",
+  "model_key",
+  "selected_packs",
+  "created_at",
+  "updated_at",
+  "last_seen_at",
+  "billing_status",
+  "studio_user_id",
+  "studio_username",
+  "studio_display_name",
+  "studio_authorized_at",
+].join(", ");
 
 const DEFAULT_UI = {
   view: "home",
@@ -42,7 +58,9 @@ const DEFAULT_UI = {
   settingsSection: "models",
   collectionId: PACK_COLLECTIONS[0].id,
   workspaceModal: null,
+  workspaceModalError: "",
   deleteWorkspaceId: null,
+  deleteWorkspaceError: "",
   mobileSidebarOpen: false,
   copyFeedback: "",
   promptError: "",
@@ -64,11 +82,35 @@ function createEdgeHeaders(session, includeUserAuth = false) {
 }
 
 function shouldUseUserAuth(workspace, session) {
-  return workspace?.accessMode === "owned" && Boolean(session?.access_token);
+  return (
+    workspace?.accessMode === "owned" &&
+    workspace?.persisted !== false &&
+    Boolean(session?.access_token)
+  );
 }
 
 function modelLabelFromKey(modelKey) {
-  return LOCAL_MODEL_CATALOG.find((model) => model.key === modelKey)?.label || modelKey || "Model";
+  return (
+    LOCAL_MODEL_CATALOG.find((model) => model.key === modelKey)?.label ||
+    modelKey ||
+    "Model"
+  );
+}
+
+function isPluginOnline(lastSeenAt) {
+  if (!lastSeenAt) {
+    return false;
+  }
+
+  return Date.now() - new Date(lastSeenAt).getTime() < 20_000;
+}
+
+async function sha256Hex(value) {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((chunk) => chunk.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function buildSelectedPackPayload(selectedPackIds = []) {
@@ -115,6 +157,7 @@ function normalizeWorkspace(workspace = {}) {
     ...workspace,
     workspaceToken,
     accessMode: workspace.accessMode || "guest",
+    persisted: typeof workspace.persisted === "boolean" ? workspace.persisted : true,
     name: workspace.name || "Untitled Workspace",
     description: workspace.description || "",
     modelKey: workspace.modelKey || LOCAL_MODEL_CATALOG[0].key,
@@ -130,6 +173,7 @@ function normalizeWorkspace(workspace = {}) {
     lastSyncedAt: workspace.lastSyncedAt || "",
     lastOpenedAt: workspace.lastOpenedAt || new Date().toISOString(),
     createdAt: workspace.createdAt || new Date().toISOString(),
+    billingStatus: workspace.billingStatus || "free",
     explorerFiles:
       Array.isArray(workspace.explorerFiles) && workspace.explorerFiles.length
         ? workspace.explorerFiles
@@ -145,52 +189,38 @@ function normalizeWorkspace(workspace = {}) {
   };
 }
 
-function loadPersistedState() {
-  const fallback = createDefaultAppState();
+function createPlaceholderWorkspace(overrides = {}) {
+  return normalizeWorkspace({
+    ...createWorkspaceFromInput({
+      name: overrides.name || "Starter Workspace",
+      description:
+        overrides.description ||
+        "Create a workspace to start building in Roblox Studio and unlock live history, Explorer, and billing flows.",
+      selectedPackIds: overrides.selectedPackIds || ["inventory-ui", "economy-core"],
+      modelKey: overrides.modelKey || LOCAL_MODEL_CATALOG[0].key,
+    }),
+    accessMode: "owned",
+    persisted: false,
+    messages: [],
+    jobs: [],
+    pluginInstalled: false,
+    pluginOnline: false,
+    syncPulse: false,
+    ...overrides,
+  });
+}
 
-  if (typeof window === "undefined") {
-    return {
-      ...fallback,
-      authProfile: EMPTY_AUTH_PROFILE,
-      workspaces: fallback.workspaces.map(normalizeWorkspace),
-    };
-  }
+function createInitialAppState() {
+  const starterWorkspace = createPlaceholderWorkspace();
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        ...fallback,
-        authProfile: EMPTY_AUTH_PROFILE,
-        workspaces: fallback.workspaces.map(normalizeWorkspace),
-      };
-    }
-
-    const parsed = JSON.parse(raw);
-    const workspaces = (parsed.workspaces?.length ? parsed.workspaces : fallback.workspaces).map(
-      normalizeWorkspace,
-    );
-    const activeWorkspaceId = workspaces.some(
-      (workspace) => workspace.id === parsed.activeWorkspaceId,
-    )
-      ? parsed.activeWorkspaceId
-      : workspaces[0]?.id || fallback.activeWorkspaceId;
-
-    return {
-      ...fallback,
-      ...parsed,
-      isAuthenticated: false,
-      authProfile: EMPTY_AUTH_PROFILE,
-      workspaces,
-      activeWorkspaceId,
-    };
-  } catch {
-    return {
-      ...fallback,
-      authProfile: EMPTY_AUTH_PROFILE,
-      workspaces: fallback.workspaces.map(normalizeWorkspace),
-    };
-  }
+  return {
+    isAuthenticated: false,
+    hasCompletedOnboarding: false,
+    onboardingChoice: "",
+    authProfile: EMPTY_AUTH_PROFILE,
+    workspaces: [starterWorkspace],
+    activeWorkspaceId: starterWorkspace.id,
+  };
 }
 
 function getSessionProfile(session) {
@@ -236,6 +266,44 @@ function getSessionProfile(session) {
     displayName: displayNameCandidates[0] || usernameCandidates[0] || "Roblox user",
     role: "Roblox account",
   };
+}
+
+function mapWorkspaceRow(row = {}) {
+  const selectedPackIds = Array.isArray(row.selected_packs)
+    ? row.selected_packs
+    : Array.isArray(row.selectedPacks)
+      ? row.selectedPacks
+      : ["inventory-ui"];
+  const pluginOnline = isPluginOnline(row.last_seen_at);
+
+  return normalizeWorkspace({
+    id: row.id,
+    name: row.display_name || "Roblox Workspace",
+    description: row.description || "",
+    workspaceToken: row.token_value || createWorkspaceToken(),
+    accessMode: "owned",
+    persisted: true,
+    modelKey: row.model_key || LOCAL_MODEL_CATALOG[0].key,
+    selectedPackIds,
+    messages: [],
+    jobs: [],
+    pluginOnline,
+    pluginInstalled: pluginOnline || Boolean(row.studio_authorized_at || row.studio_username),
+    syncPulse: pluginOnline,
+    studioStatus: pluginOnline
+      ? "connected"
+      : row.studio_authorized_at || row.studio_username
+        ? "pairing"
+        : "waiting",
+    lastSyncedAt: row.last_seen_at || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    lastOpenedAt: row.updated_at || row.created_at || new Date().toISOString(),
+    billingStatus: row.billing_status || "free",
+    studioUserId: row.studio_user_id || null,
+    studioUsername: row.studio_username || "",
+    studioDisplayName: row.studio_display_name || "",
+    studioAuthorizedAt: row.studio_authorized_at || "",
+  });
 }
 
 function mapJobOperation(operation, index, jobId) {
@@ -336,7 +404,8 @@ function mergeWorkspaceState(currentWorkspace, snapshot) {
     ? [...snapshot.messages].reverse().map((message) => mapMessageRow(message, jobsById))
     : currentWorkspace.messages;
   const project = snapshot.project || {};
-  const workspaceToken = project.workspaceToken || currentWorkspace.workspaceToken || createWorkspaceToken();
+  const workspaceToken =
+    project.workspaceToken || currentWorkspace.workspaceToken || createWorkspaceToken();
   const selectedPackIds = Array.isArray(project.selectedPacks)
     ? project.selectedPacks
     : currentWorkspace.selectedPackIds;
@@ -352,6 +421,7 @@ function mergeWorkspaceState(currentWorkspace, snapshot) {
     description: project.description ?? currentWorkspace.description,
     workspaceToken,
     accessMode: snapshot.accessMode || currentWorkspace.accessMode || "guest",
+    persisted: currentWorkspace.persisted !== false,
     modelKey: project.modelKey || currentWorkspace.modelKey,
     selectedPackIds,
     messages: mappedMessages,
@@ -363,6 +433,8 @@ function mergeWorkspaceState(currentWorkspace, snapshot) {
     studioStatus: pluginOnline ? "connected" : pluginInstalled ? "pairing" : "waiting",
     lastSyncedAt: snapshot.workspace?.last_seen_at || currentWorkspace.lastSyncedAt || "",
     explorerFiles: buildWorkspaceFiles(selectedPackIds, mappedJobs),
+    billingStatus:
+      snapshot.project?.billingStatus || currentWorkspace.billingStatus || "free",
     studioUserId: project.studioUserId || null,
     studioUsername: project.studioUsername || "",
     studioDisplayName: project.studioDisplayName || "",
@@ -381,7 +453,7 @@ async function parseEdgeResponse(response) {
 }
 
 export function useZestAppState() {
-  const [appState, setAppState] = useState(loadPersistedState);
+  const [appState, setAppState] = useState(createInitialAppState);
   const [ui, setUi] = useState(DEFAULT_UI);
   const [session, setSession] = useState(null);
   const feedbackTimeoutRef = useRef(null);
@@ -397,114 +469,10 @@ export function useZestAppState() {
   }, [session]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-  }, [appState]);
-
-  useEffect(() => {
     return () => {
       if (feedbackTimeoutRef.current) {
         window.clearTimeout(feedbackTimeoutRef.current);
       }
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    let subscription;
-
-    async function hydrateSession() {
-      try {
-        const client = requireSupabase();
-        const { data, error } = await client.auth.getSession();
-
-        if (error) {
-          throw error;
-        }
-
-        if (cancelled) {
-          return;
-        }
-
-        const nextSession = data.session || null;
-        setSession(nextSession);
-
-        if (nextSession?.user) {
-          setAppState((current) => ({
-            ...current,
-            isAuthenticated: true,
-            authProfile: getSessionProfile(nextSession),
-          }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setUi((current) => ({
-            ...current,
-            authError:
-              error instanceof Error ? error.message : "Supabase auth is not configured correctly.",
-          }));
-        }
-      }
-    }
-
-    try {
-      const client = requireSupabase();
-      hydrateSession();
-
-      const authListener = client.auth.onAuthStateChange((_event, nextSession) => {
-        setSession(nextSession || null);
-
-        if (nextSession?.user) {
-          setAppState((current) => ({
-            ...current,
-            isAuthenticated: true,
-            authProfile: getSessionProfile(nextSession),
-          }));
-          setUi((current) => ({
-            ...current,
-            authModalOpen: false,
-            authError: "",
-            onboardingOpen: !appStateRef.current.hasCompletedOnboarding,
-            view: "workspace",
-          }));
-          return;
-        }
-
-        setAppState((current) => ({
-          ...current,
-          isAuthenticated: false,
-          hasCompletedOnboarding: false,
-          onboardingChoice: "",
-          authProfile: EMPTY_AUTH_PROFILE,
-        }));
-        setUi((current) => ({
-          ...current,
-          authModalOpen: false,
-          authError: "",
-          onboardingOpen: false,
-          settingsOpen: false,
-          activeDrawer: null,
-          view: "home",
-        }));
-      });
-
-      subscription = authListener.data.subscription;
-    } catch (error) {
-      if (!cancelled) {
-        setUi((current) => ({
-          ...current,
-          authError:
-            error instanceof Error ? error.message : "Supabase auth is not configured correctly.",
-        }));
-      }
-    }
-
-    return () => {
-      cancelled = true;
-      subscription?.unsubscribe();
     };
   }, []);
 
@@ -522,7 +490,10 @@ export function useZestAppState() {
 
   const recentWorkspaces = useMemo(
     () =>
-      getRecentWorkspaces(appState.workspaces, activeWorkspace?.id).slice(0, MAX_RECENT_WORKSPACES),
+      getRecentWorkspaces(appState.workspaces, activeWorkspace?.id).slice(
+        0,
+        MAX_RECENT_WORKSPACES,
+      ),
     [appState.workspaces, activeWorkspace?.id],
   );
 
@@ -530,7 +501,10 @@ export function useZestAppState() {
 
   const workspaceExplorerTree = useMemo(
     () =>
-      filterExplorerNodes(buildExplorerTree(activeWorkspace?.explorerFiles || []), ui.explorerSearch),
+      filterExplorerNodes(
+        buildExplorerTree(activeWorkspace?.explorerFiles || []),
+        ui.explorerSearch,
+      ),
     [activeWorkspace?.explorerFiles, ui.explorerSearch],
   );
 
@@ -566,6 +540,221 @@ export function useZestAppState() {
 
     updateWorkspace(activeWorkspace.id, (workspace) => ({ ...workspace, ...patch }));
   }
+
+  function resetSignedOutState() {
+    const placeholder = createPlaceholderWorkspace();
+
+    setAppState({
+      isAuthenticated: false,
+      hasCompletedOnboarding: false,
+      onboardingChoice: "",
+      authProfile: EMPTY_AUTH_PROFILE,
+      workspaces: [placeholder],
+      activeWorkspaceId: placeholder.id,
+    });
+  }
+
+  async function loadOwnedWorkspaces(activeWorkspaceIdHint) {
+    const client = requireSupabase();
+    const currentSession = sessionRef.current;
+
+    if (!currentSession?.user) {
+      resetSignedOutState();
+      return [];
+    }
+
+    const { data, error } = await client
+      .from("workspaces")
+      .select(WORKSPACE_SELECT)
+      .eq("is_archived", false)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const mapped =
+      data?.length
+        ? data.map(mapWorkspaceRow)
+        : [
+            createPlaceholderWorkspace({
+              name: "Create your first workspace",
+              description:
+                "You do not have any saved workspaces yet. Use New Workspace to create one in Supabase.",
+            }),
+          ];
+    const preferredActiveId = activeWorkspaceIdHint || appStateRef.current.activeWorkspaceId;
+    const nextActiveId = mapped.some((workspace) => workspace.id === preferredActiveId)
+      ? preferredActiveId
+      : mapped[0]?.id;
+
+    setAppState((current) => ({
+      ...current,
+      isAuthenticated: true,
+      authProfile: getSessionProfile(currentSession),
+      workspaces: mapped,
+      activeWorkspaceId: nextActiveId,
+    }));
+
+    return mapped;
+  }
+
+  async function requestWorkspaceState(workspace, options = {}) {
+    const includeUserAuth = shouldUseUserAuth(workspace, sessionRef.current);
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/workspace-state`, {
+      method: "POST",
+      headers: createEdgeHeaders(sessionRef.current, includeUserAuth),
+      body: JSON.stringify({
+        workspaceToken: workspace.workspaceToken,
+        ensure: options.ensure ?? true,
+        name: workspace.name,
+        description: workspace.description,
+        modelKey: workspace.modelKey,
+        selectedPacks: workspace.selectedPackIds,
+      }),
+    });
+
+    return parseEdgeResponse(response);
+  }
+
+  async function refreshWorkspaceState(workspaceId, options = {}) {
+    const workspace = appStateRef.current.workspaces.find((item) => item.id === workspaceId);
+    if (
+      !workspace?.workspaceToken ||
+      !SUPABASE_URL ||
+      !SUPABASE_ANON_KEY ||
+      workspace.persisted === false
+    ) {
+      return null;
+    }
+
+    const snapshot = await requestWorkspaceState(workspace, options);
+    updateWorkspace(workspaceId, (current) => mergeWorkspaceState(current, snapshot));
+    return snapshot;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    let subscription;
+
+    async function hydrateSession() {
+      try {
+        const client = requireSupabase();
+        const { data, error } = await client.auth.getSession();
+
+        if (error) {
+          throw error;
+        }
+
+        if (!cancelled) {
+          setSession(data.session || null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setUi((current) => ({
+            ...current,
+            authError:
+              error instanceof Error
+                ? error.message
+                : "Supabase auth is not configured correctly.",
+          }));
+        }
+      }
+    }
+
+    try {
+      const client = requireSupabase();
+      hydrateSession();
+
+      const authListener = client.auth.onAuthStateChange((_event, nextSession) => {
+        setSession(nextSession || null);
+
+        if (nextSession?.user) {
+          setAppState((current) => ({
+            ...current,
+            isAuthenticated: true,
+            authProfile: getSessionProfile(nextSession),
+          }));
+          setUi((current) => ({
+            ...current,
+            authModalOpen: false,
+            authError: "",
+            onboardingOpen: !appStateRef.current.hasCompletedOnboarding,
+            view: "workspace",
+          }));
+          return;
+        }
+
+        resetSignedOutState();
+        setUi((current) => ({
+          ...current,
+          authModalOpen: false,
+          authError: "",
+          onboardingOpen: false,
+          settingsOpen: false,
+          activeDrawer: null,
+          view: "home",
+          workspaceModalError: "",
+          deleteWorkspaceError: "",
+        }));
+      });
+
+      subscription = authListener.data.subscription;
+    } catch (error) {
+      if (!cancelled) {
+        setUi((current) => ({
+          ...current,
+          authError:
+            error instanceof Error
+              ? error.message
+              : "Supabase auth is not configured correctly.",
+        }));
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initializeWorkspaces() {
+      if (!session?.user) {
+        return;
+      }
+
+      setUi((current) => ({
+        ...current,
+        isWorkspaceLoading: true,
+        authError: "",
+      }));
+
+      try {
+        await loadOwnedWorkspaces();
+      } catch (error) {
+        if (!cancelled) {
+          setUi((current) => ({
+            ...current,
+            authError:
+              error instanceof Error ? error.message : "Unable to load workspaces.",
+          }));
+        }
+      } finally {
+        if (!cancelled) {
+          setUi((current) => ({ ...current, isWorkspaceLoading: false }));
+        }
+      }
+    }
+
+    initializeWorkspaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
 
   function markWorkspaceOpened(workspaceId) {
     const lastOpenedAt = new Date().toISOString();
@@ -639,19 +828,15 @@ export function useZestAppState() {
     }
 
     setSession(null);
-    setAppState((current) => ({
-      ...current,
-      isAuthenticated: false,
-      hasCompletedOnboarding: false,
-      onboardingChoice: "",
-      authProfile: EMPTY_AUTH_PROFILE,
-    }));
+    resetSignedOutState();
     setUi((current) => ({
       ...current,
       view: "home",
       activeDrawer: null,
       settingsOpen: false,
       authError: "",
+      workspaceModalError: "",
+      deleteWorkspaceError: "",
     }));
   }
 
@@ -718,7 +903,9 @@ export function useZestAppState() {
     );
 
     const selectedPackIds = everyLoaded
-      ? activeWorkspace.selectedPackIds.filter((packId) => !collection.packIds.includes(packId))
+      ? activeWorkspace.selectedPackIds.filter(
+          (packId) => !collection.packIds.includes(packId),
+        )
       : Array.from(new Set([...activeWorkspace.selectedPackIds, ...collection.packIds]));
 
     patchActiveWorkspace({
@@ -739,62 +926,163 @@ export function useZestAppState() {
         mode,
         workspaceId: workspace?.id || null,
       },
+      workspaceModalError: "",
     }));
   }
 
   function closeWorkspaceModal() {
-    setUi((current) => ({ ...current, workspaceModal: null }));
-  }
-
-  function submitWorkspaceForm(values) {
-    if (ui.workspaceModal?.mode === "rename" && ui.workspaceModal.workspaceId) {
-      updateWorkspace(ui.workspaceModal.workspaceId, (workspace) => ({
-        ...workspace,
-        name: values.name.trim(),
-        description: values.description.trim(),
-      }));
-    } else {
-      const workspace = normalizeWorkspace(createWorkspaceFromInput(values));
-      setAppState((current) => ({
-        ...current,
-        workspaces: [workspace, ...current.workspaces],
-        activeWorkspaceId: workspace.id,
-      }));
-    }
-
     setUi((current) => ({
       ...current,
       workspaceModal: null,
-      isWorkspaceLoading: false,
-      mobileSidebarOpen: false,
+      workspaceModalError: "",
     }));
   }
 
+  async function submitWorkspaceForm(values) {
+    setUi((current) => ({
+      ...current,
+      workspaceModalError: "",
+      isWorkspaceLoading: true,
+    }));
+
+    try {
+      const client = requireSupabase();
+      const userId = sessionRef.current?.user?.id;
+
+      if (!userId) {
+        throw new Error("Sign in with Roblox before creating or editing workspaces.");
+      }
+
+      let targetWorkspaceId = ui.workspaceModal?.workspaceId || null;
+
+      if (ui.workspaceModal?.mode === "rename" && targetWorkspaceId) {
+        const { data, error } = await client
+          .from("workspaces")
+          .update({
+            display_name: values.name.trim(),
+            description: values.description.trim(),
+            model_key: values.modelKey,
+            selected_packs: values.selectedPackIds,
+          })
+          .eq("id", targetWorkspaceId)
+          .select(WORKSPACE_SELECT)
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        targetWorkspaceId = data.id;
+      } else {
+        const workspaceToken = createWorkspaceToken();
+        const tokenHash = await sha256Hex(workspaceToken);
+        const { data, error } = await client
+          .from("workspaces")
+          .insert({
+            token_hash: tokenHash,
+            token_value: workspaceToken,
+            owner_user_id: userId,
+            display_name: values.name.trim(),
+            description: values.description.trim(),
+            model_key: values.modelKey,
+            selected_packs: values.selectedPackIds,
+            billing_status: "free",
+          })
+          .select(WORKSPACE_SELECT)
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        targetWorkspaceId = data.id;
+      }
+
+      await loadOwnedWorkspaces(targetWorkspaceId);
+      setUi((current) => ({
+        ...current,
+        workspaceModal: null,
+        workspaceModalError: "",
+        isWorkspaceLoading: false,
+        mobileSidebarOpen: false,
+        view: "workspace",
+      }));
+    } catch (error) {
+      setUi((current) => ({
+        ...current,
+        workspaceModalError:
+          error instanceof Error ? error.message : "Unable to save this workspace.",
+        isWorkspaceLoading: false,
+      }));
+    }
+  }
+
   function askDeleteWorkspace(workspaceId) {
-    setUi((current) => ({ ...current, deleteWorkspaceId: workspaceId }));
+    setUi((current) => ({
+      ...current,
+      deleteWorkspaceId: workspaceId,
+      deleteWorkspaceError: "",
+    }));
   }
 
   function closeDeleteWorkspace() {
-    setUi((current) => ({ ...current, deleteWorkspaceId: null }));
+    setUi((current) => ({
+      ...current,
+      deleteWorkspaceId: null,
+      deleteWorkspaceError: "",
+    }));
   }
 
-  function deleteWorkspace() {
+  async function deleteWorkspace() {
     const workspaceId = ui.deleteWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
-    setAppState((current) => {
-      const remaining = current.workspaces.filter((workspace) => workspace.id !== workspaceId);
-      const nextActive = remaining[0]?.id || current.activeWorkspaceId;
+    const workspace = appStateRef.current.workspaces.find((item) => item.id === workspaceId);
 
-      return {
+    setUi((current) => ({
+      ...current,
+      deleteWorkspaceError: "",
+      isWorkspaceLoading: true,
+    }));
+
+    try {
+      if (!workspace?.persisted) {
+        const placeholder = createPlaceholderWorkspace();
+        setAppState((current) => ({
+          ...current,
+          workspaces: [placeholder],
+          activeWorkspaceId: placeholder.id,
+        }));
+      } else {
+        const client = requireSupabase();
+        const { error } = await client
+          .from("workspaces")
+          .delete()
+          .eq("id", workspaceId);
+
+        if (error) {
+          throw error;
+        }
+
+        await loadOwnedWorkspaces();
+      }
+
+      setUi((current) => ({
         ...current,
-        workspaces: remaining,
-        activeWorkspaceId: nextActive,
-      };
-    });
-    setUi((current) => ({ ...current, deleteWorkspaceId: null }));
+        deleteWorkspaceId: null,
+        deleteWorkspaceError: "",
+        isWorkspaceLoading: false,
+      }));
+    } catch (error) {
+      setUi((current) => ({
+        ...current,
+        deleteWorkspaceError:
+          error instanceof Error ? error.message : "Unable to delete this workspace.",
+        isWorkspaceLoading: false,
+      }));
+    }
   }
 
   async function copyText(value, label) {
@@ -806,37 +1094,10 @@ export function useZestAppState() {
     }
   }
 
-  async function requestWorkspaceState(workspace, options = {}) {
-    const includeUserAuth = shouldUseUserAuth(workspace, sessionRef.current);
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/workspace-state`, {
-      method: "POST",
-      headers: createEdgeHeaders(sessionRef.current, includeUserAuth),
-      body: JSON.stringify({
-        workspaceToken: workspace.workspaceToken,
-        ensure: options.ensure ?? true,
-        name: workspace.name,
-        description: workspace.description,
-        modelKey: workspace.modelKey,
-        selectedPacks: workspace.selectedPackIds,
-      }),
-    });
-
-    return parseEdgeResponse(response);
-  }
-
-  async function refreshWorkspaceState(workspaceId, options = {}) {
-    const workspace = appStateRef.current.workspaces.find((item) => item.id === workspaceId);
-    if (!workspace?.workspaceToken || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      return null;
-    }
-
-    const snapshot = await requestWorkspaceState(workspace, options);
-    updateWorkspace(workspaceId, (current) => mergeWorkspaceState(current, snapshot));
-    return snapshot;
-  }
-
   function regeneratePairCode() {
-    setCopyFeedback("Pair codes stay tied to the workspace token until rotation is added server-side.");
+    setCopyFeedback(
+      "Pair codes stay tied to the workspace token until rotation is added server-side.",
+    );
   }
 
   async function reconnectStudio() {
@@ -847,7 +1108,11 @@ export function useZestAppState() {
     updateWorkspace(activeWorkspace.id, (workspace) => ({
       ...workspace,
       syncPulse: true,
-      studioStatus: workspace.pluginOnline ? "syncing" : workspace.pluginInstalled ? "pairing" : "waiting",
+      studioStatus: workspace.pluginOnline
+        ? "syncing"
+        : workspace.pluginInstalled
+          ? "pairing"
+          : "waiting",
     }));
 
     try {
@@ -856,7 +1121,11 @@ export function useZestAppState() {
       updateWorkspace(activeWorkspace.id, (workspace) => ({
         ...workspace,
         syncPulse: false,
-        studioStatus: workspace.pluginOnline ? "connected" : workspace.pluginInstalled ? "pairing" : "waiting",
+        studioStatus: workspace.pluginOnline
+          ? "connected"
+          : workspace.pluginInstalled
+            ? "pairing"
+            : "waiting",
       }));
     }
   }
@@ -864,7 +1133,11 @@ export function useZestAppState() {
   function setStudioInstalled(installed) {
     patchActiveWorkspace({
       pluginInstalled: installed,
-      studioStatus: activeWorkspace.pluginOnline ? "connected" : installed ? "pairing" : "waiting",
+      studioStatus: activeWorkspace.pluginOnline
+        ? "connected"
+        : installed
+          ? "pairing"
+          : "waiting",
     });
   }
 
@@ -911,6 +1184,14 @@ export function useZestAppState() {
     const prompt = trimPrompt(rawPrompt || activeWorkspace?.promptDraft || "");
     if (!prompt || !activeWorkspace) {
       setUi((current) => ({ ...current, promptError: "Write a prompt before sending." }));
+      return;
+    }
+
+    if (sessionRef.current?.user && activeWorkspace.persisted === false) {
+      setUi((current) => ({
+        ...current,
+        promptError: "Create this workspace first so Zest can connect it to your Supabase account.",
+      }));
       return;
     }
 
@@ -962,7 +1243,9 @@ export function useZestAppState() {
       });
       const result = await parseEdgeResponse(response);
 
-      updateWorkspace(activeWorkspace.id, (workspace) => mergeWorkspaceState(workspace, result.workspace));
+      updateWorkspace(activeWorkspace.id, (workspace) =>
+        mergeWorkspaceState(workspace, result.workspace),
+      );
       setUi((current) => ({
         ...current,
         isSubmitting: false,
@@ -977,7 +1260,11 @@ export function useZestAppState() {
           (message) => message.id !== userMessage.id && message.id !== loadingMessage.id,
         ),
         syncPulse: false,
-        studioStatus: workspace.pluginOnline ? "connected" : workspace.pluginInstalled ? "pairing" : "waiting",
+        studioStatus: workspace.pluginOnline
+          ? "connected"
+          : workspace.pluginInstalled
+            ? "pairing"
+            : "waiting",
       }));
 
       setUi((current) => ({
@@ -989,7 +1276,13 @@ export function useZestAppState() {
   }
 
   useEffect(() => {
-    if (!activeWorkspace?.id || !activeWorkspace.workspaceToken || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (
+      !activeWorkspace?.id ||
+      !activeWorkspace.workspaceToken ||
+      !SUPABASE_URL ||
+      !SUPABASE_ANON_KEY ||
+      activeWorkspace.persisted === false
+    ) {
       return;
     }
 
@@ -1007,7 +1300,9 @@ export function useZestAppState() {
           return;
         }
 
-        updateWorkspace(activeWorkspace.id, (workspace) => mergeWorkspaceState(workspace, snapshot));
+        updateWorkspace(activeWorkspace.id, (workspace) =>
+          mergeWorkspaceState(workspace, snapshot),
+        );
       } catch {
         if (cancelled) {
           return;
@@ -1035,6 +1330,7 @@ export function useZestAppState() {
     activeWorkspace?.name,
     activeWorkspace?.description,
     activeWorkspace?.modelKey,
+    activeWorkspace?.persisted,
     activeWorkspace?.selectedPackIds?.join("|"),
   ]);
 

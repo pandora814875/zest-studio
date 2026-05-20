@@ -351,6 +351,13 @@ to authenticated
 using (auth.uid() = owner_user_id)
 with check (auth.uid() = owner_user_id);
 
+drop policy if exists "Workspaces delete own rows" on public.workspaces;
+create policy "Workspaces delete own rows"
+on public.workspaces
+for delete
+to authenticated
+using (auth.uid() = owner_user_id);
+
 drop policy if exists "Chat messages read own workspace rows" on public.chat_messages;
 create policy "Chat messages read own workspace rows"
 on public.chat_messages

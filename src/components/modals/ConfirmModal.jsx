@@ -1,6 +1,14 @@
 import { ModalShell } from "./ModalShell";
 
-export function ConfirmModal({ open, title, body, onCancel, onConfirm, confirmLabel = "Delete" }) {
+export function ConfirmModal({
+  open,
+  title,
+  body,
+  error,
+  onCancel,
+  onConfirm,
+  confirmLabel = "Delete",
+}) {
   return (
     <ModalShell open={open} onClose={onCancel}>
       <div className="dialog-form">
@@ -11,6 +19,7 @@ export function ConfirmModal({ open, title, body, onCancel, onConfirm, confirmLa
           </div>
         </div>
         <p className="drawer-copy">{body}</p>
+        {error ? <div className="notice notice-error">{error}</div> : null}
         <div className="dialog-actions">
           <button className="secondary-button" type="button" onClick={onCancel}>
             Cancel
