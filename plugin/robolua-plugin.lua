@@ -515,6 +515,64 @@ local function applyDeleteInstance(operation, resultLog)
 	})
 end
 
+local function coercePropertyValue(propertyName, propertyValue)
+	if propertyName == "BrickColor" and type(propertyValue) == "string" then
+		return BrickColor.new(propertyValue)
+	end
+
+	return propertyValue
+end
+
+local function applyEditProperties(operation, resultLog)
+	local target = resolvePath(operation.path)
+	if not target then
+		error("Could not resolve instance for edit_properties: " .. tostring(operation.path))
+	end
+
+	local properties = operation.properties
+	if type(properties) ~= "table" then
+		error("edit_properties requires a properties table.")
+	end
+
+	local fullName = target:GetFullName()
+
+	for propertyName, propertyValue in pairs(properties) do
+		local hasProperty = pcall(function()
+			return target[propertyName]
+		end)
+
+		if not hasProperty then
+			table.insert(resultLog, {
+				type = operation.type,
+				target = fullName,
+				property = tostring(propertyName),
+				result = "missing-property-skip",
+			})
+		else
+			local success, err = pcall(function()
+				target[propertyName] = coercePropertyValue(propertyName, propertyValue)
+			end)
+
+			if success then
+				table.insert(resultLog, {
+					type = operation.type,
+					target = fullName,
+					property = tostring(propertyName),
+					result = "updated",
+				})
+			else
+				table.insert(resultLog, {
+					type = operation.type,
+					target = fullName,
+					property = tostring(propertyName),
+					result = "failed",
+					error = tostring(err),
+				})
+			end
+		end
+	end
+end
+
 local function applyOperation(operation, resultLog)
 	if operation.type == "ensure_instance" then
 		applyEnsureInstance(operation, resultLog)
@@ -528,6 +586,11 @@ local function applyOperation(operation, resultLog)
 
 	if operation.type == "delete_instance" then
 		applyDeleteInstance(operation, resultLog)
+		return
+	end
+
+	if operation.type == "edit_properties" then
+		applyEditProperties(operation, resultLog)
 		return
 	end
 
